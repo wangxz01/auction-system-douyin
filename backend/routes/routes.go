@@ -9,16 +9,24 @@ import (
 
 func Register(r *gin.Engine) {
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
-		AllowCredentials: true,
+		AllowOrigins: []string{"*"},
+		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders: []string{"Origin", "Content-Type", "Authorization"},
 	}))
 
 	r.GET("/health", controllers.Health)
 
-	api := r.Group("/api/v1")
+	api := r.Group("/api")
 	{
-		api.GET("/health", controllers.Health)
+		api.POST("/auctions", controllers.CreateAuction)
+		api.GET("/auctions", controllers.GetAuctions)
+		api.GET("/auctions/:id", controllers.GetAuction)
+		api.POST("/auctions/:id/start", controllers.StartAuction)
+		api.POST("/auctions/:id/cancel", controllers.CancelAuction)
+
+		api.POST("/auctions/:id/bids", controllers.PlaceBid)
+		api.GET("/auctions/:id/bids", controllers.GetBids)
+
+		api.GET("/auctions/:id/order", controllers.GetOrder)
 	}
 }

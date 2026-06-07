@@ -25,3 +25,32 @@ services:
 volumes:
   mysql_data:
   redis_data:
+
+# =============================================================================
+# 【本文件作用】docker-compose.yml（项目根目录）
+# =============================================================================
+# 作用：用一条命令同时启动多个 Docker 容器，本项目用来跑 MySQL 和 Redis。
+#
+# 为什么用 Docker 而不是本地装 MySQL/Redis：
+#   1. 不污染本机环境（不用真的在 Mac 上装 MySQL）
+#   2. 团队成员配置统一（版本、密码、端口都写在一个文件里）
+#   3. 想删除时一行命令搞定（docker compose down -v）
+#
+# 配置说明：
+#   - services: 定义要启动的服务（容器）
+#     - mysql: MySQL 8.0 数据库
+#         * container_name: 容器在 Docker 里的名字，方便后续 docker exec
+#         * ports: "主机端口:容器端口"，3306:3306 表示用本机 3306 访问
+#         * environment: MySQL 容器启动时自动建库、建用户
+#         * volumes: 数据持久化到 Docker 卷，容器删了数据还在
+#     - redis: Redis 7（alpine 是更小的 Linux 镜像，省空间）
+#   - volumes (最外层): 声明命名卷，让数据不随容器销毁而丢失
+#
+# 常用命令：
+#   docker compose up -d     启动（-d 表示后台运行）
+#   docker compose down      停止并删除容器（数据卷保留）
+#   docker compose down -v   停止并删除容器+数据卷（彻底重置）
+#   docker compose ps        查看容器状态
+#   docker compose logs -f   实时查看日志
+# =============================================================================
+

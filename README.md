@@ -22,13 +22,51 @@
 | Redis 容器 | ✅ | Docker 启动，6379 端口可连 |
 | CORS 跨域 | ✅ | 后端允许 `http://localhost:5173` |
 
+### ✅ 第二阶段：后端业务接口（已完成）
+
+目标：实现拍卖系统全部核心后端接口，含数据库连接、模型、竞拍/出价/订单业务、定时任务。
+
+| 模块 | 状态 | 说明 |
+|---|---|---|
+| 数据库连接 | ✅ | `config/db.go` 用 GORM 连 MySQL，启动时 AutoMigrate 建表 |
+| 数据模型 | ✅ | `models/` 下 User / Auction / Bid / Order 四个结构体 |
+| 竞拍接口 | ✅ | 创建 / 列表 / 详情 / 开始 / 取消，5 个接口 |
+| 出价接口 | ✅ | 出价（含加价/封顶/自动延时校验）+ Top10 排行榜 |
+| 订单接口 | ✅ | 按 auction_id 查订单 + 内部 createOrder 封装 |
+| 定时任务 | ✅ | `config/scheduler.go` 每 5s 扫描过期 active 竞拍，自动 finished 并生成订单 |
+| CORS | ✅ | 已放开为允许所有来源 |
+| E2E 测试 | ✅ | curl 全流程跑通：创建→开始→出价→封顶/超时→查订单 |
+
+**已注册路由清单**
+
+```
+GET    /health
+POST   /api/auctions
+GET    /api/auctions
+GET    /api/auctions/:id
+POST   /api/auctions/:id/start
+POST   /api/auctions/:id/cancel
+POST   /api/auctions/:id/bids
+GET    /api/auctions/:id/bids
+GET    /api/auctions/:id/order
+```
+
+**业务规则要点**
+
+- 所有成功响应 `{"data": ...}`，失败响应 `{"error": "原因"}`
+- 出价校验顺序：状态 → 是否过期 → 加价幅度 → 封顶价
+- 加价规则：`amount = current_price + n × price_step` (n ≥ 1)
+- 自动延时：距 `ends_at` 不足 30s 出价 → ends_at 延后到 30s
+- 封顶价命中：立即 finished + 生成订单
+- 定时器幂等：用条件更新避免与封顶价路径重复生成订单
+- 订单表 `auction_id` 加唯一索引，双保险
+
 ### ⏳ 后续阶段（未开始）
 
-- **第二阶段**：后端真实连接 MySQL/Redis；定义用户、商品、出价等数据模型
-- **第三阶段**：用户注册/登录、JWT 鉴权
-- **第四阶段**：商品 CRUD、拍卖列表
-- **第五阶段**：WebSocket 实时出价推送
-- **第六阶段**：前端 UI 美化、部署
+- **第三阶段**：前端业务页面（竞拍列表、详情、出价 UI）
+- **第四阶段**：WebSocket 实时出价推送（替代轮询）
+- **第五阶段**：用户系统（注册/登录、JWT 鉴权）
+- **第六阶段**：UI 美化、生产部署
 
 ---
 
@@ -44,12 +82,22 @@ auction-system/
 │   ├── .env                   # 真实配置（不要提交 git）
 │   ├── .env.example           # 配置模板（可提交）
 │   ├── .gitignore
-│   ├── cmd/server/main.go     # 程序入口
-│   ├── config/config.go       # 加载 .env 配置
+│   ├── cmd/server/main.go     # 程序入口（启动时初始化 DB + 定时器）
+│   ├── config/
+│   │   ├── config.go          # 加载 .env 配置
+│   │   ├── db.go              # GORM 连 MySQL + AutoMigrate
+│   │   └── scheduler.go       # 5s 定时扫描过期竞拍
 │   ├── controllers/           # 接口处理函数
-│   │   └── health_controller.go
+│   │   ├── health_controller.go
+│   │   ├── auction.go         # 竞拍 CRUD + 开始/取消
+│   │   ├── bid.go             # 出价 + Top10 排行
+│   │   └── order.go           # 查询订单 + 内部 createOrder
 │   ├── routes/routes.go       # 路由注册 + CORS
-│   └── models/                # 数据模型（待添加）
+│   └── models/                # 数据模型
+│       ├── user.go
+│       ├── auction.go
+│       ├── bid.go
+│       └── order.go           # 含 CreateOrderForAuction 工具函数
 │
 └── frontend/                  # React + TypeScript 前端
     ├── package.json
@@ -59,6 +107,76 @@ auction-system/
         ├── main.tsx
         └── App.tsx            # 首页：调用 /health 并展示
 ```
+
+---
+
+## 🗂️ 数据模型
+
+数据库 `auction` 共 4 张表，GORM 启动时 AutoMigrate 自动建好。所有主键 `bigint unsigned`，价格 `decimal(12,2)`（精确到分），时间 `datetime(3)`（毫秒精度）。
+
+### `auctions`（竞拍主表）
+
+> 命名说明：原任务描述中称为"商品表 `auction_items`"，本项目把"商品"和"竞拍场次"合并到一张表（小项目惯例），表名保留 `auctions`。后续若出现"同一商品多次开拍"再拆表。
+
+| 字段 | 类型 | 索引 | 说明 |
+|---|---|---|---|
+| `id` | bigint unsigned | PK | 主键 |
+| `title` | varchar(255) | — | 商品标题 |
+| `description` | text | — | 商品描述 |
+| `image_url` | varchar(512) | — | 主图 URL |
+| `start_price` | decimal(12,2) | — | 起拍价 |
+| `price_step` | decimal(12,2) | — | 加价幅度 |
+| `ceiling_price` | decimal(12,2) | — | 封顶价（可空） |
+| `current_price` | decimal(12,2) | — | 当前价 |
+| `duration_seconds` | bigint | — | 持续秒数 |
+| `status` | varchar(16) | IDX | pending / active / finished / cancelled |
+| `winner_id` | bigint unsigned | — | 中标用户（可空） |
+| `started_at` | datetime(3) | — | 开始时间 |
+| `ends_at` | datetime(3) | IDX | 结束时间（定时器扫描此字段） |
+| `created_at`/`updated_at` | datetime(3) | — | 时间戳 |
+
+### `bids`（出价流水表，只增不改）
+
+| 字段 | 类型 | 索引 | 说明 |
+|---|---|---|---|
+| `id` | bigint unsigned | PK | |
+| `auction_id` | bigint unsigned | IDX | 哪场竞拍 |
+| `user_id` | bigint unsigned | IDX | 出价人 |
+| `amount` | decimal(12,2) | — | 出价金额 |
+| `created_at` | datetime(3) | — | 出价时间 |
+
+### `orders`（订单表）
+
+| 字段 | 类型 | 索引 | 说明 |
+|---|---|---|---|
+| `id` | bigint unsigned | PK | |
+| `auction_id` | bigint unsigned | **UNIQUE** | 一场拍卖最多一个订单 |
+| `user_id` | bigint unsigned | IDX | 中标用户 |
+| `final_price` | decimal(12,2) | — | 成交价 |
+| `status` | varchar(16) | — | 默认 pending（后续可扩 paid/shipped） |
+| `created_at`/`updated_at` | datetime(3) | — | 时间戳 |
+
+### `users`（用户表，占位）
+
+| 字段 | 类型 | 索引 | 说明 |
+|---|---|---|---|
+| `id` | bigint unsigned | PK | |
+| `username` | varchar(64) | UNIQUE | 用户名 |
+| `created_at`/`updated_at` | datetime(3) | — | |
+
+> 当前业务不依赖用户记录（user_id 由前端直传），表先占位。后续接入注册/登录时再补 `password_hash`、`email` 等字段。
+
+### 状态机
+
+```
+pending(未开始) ──/start──→ active(进行中) ──自然到期/触达封顶──→ finished(已结束)
+       │                          │
+       └────/cancel────→ cancelled(已取消) ←────/cancel────┘
+```
+
+- pending：只能 start 或 cancel
+- active：可出价、可 cancel；定时器扫描 `ends_at`；触达 `ceiling_price` 立即结束
+- finished / cancelled：只读，不可逆
 
 ---
 
@@ -191,4 +309,37 @@ A: 后端 `.env` 改完要重启 `go run`；前端 `.env` 改完要重启 `npm r
 
 ## 📅 更新记录
 
+- **2026-06-07** — 完成第二阶段：后端业务接口全部实现，含 9 条 API + 定时任务，E2E 测试通过
 - **2026-05-22** — 完成第一阶段：项目框架搭建、前后端联调成功
+
+---
+
+<!--
+================================================================================
+【本文件作用】README.md（项目根目录）
+================================================================================
+作用：整个拍卖系统项目的"门面文档"和"使用说明书"。
+任何人（包括未来的你）打开 GitHub 仓库时，第一眼看到的就是这个文件。
+
+包含内容：
+  1. 项目简介（用了什么技术栈）
+  2. 当前进度（哪些阶段完成、哪些未完成）
+  3. 项目目录结构总览
+  4. 快速启动步骤（怎么跑起来）
+  5. 配置说明（.env 各字段含义）
+  6. 数据库连接信息（给 TablePlus / DBeaver 用）
+  7. 技术栈说明（每个依赖包是干嘛的）
+  8. 常见问题（FAQ）
+  9. 更新记录
+
+为什么放在根目录：
+  GitHub 会自动识别根目录的 README.md 并渲染到仓库首页。
+  这是开源项目的"行业潜规则"，必须放这里。
+
+何时更新：
+  - 完成一个阶段时，更新"当前进度"和"更新记录"
+  - 新增依赖或配置项时，更新"技术栈"或"配置说明"
+  - 遇到新坑时，补充到"常见问题"
+================================================================================
+-->
+

@@ -12,6 +12,9 @@ import (
 func main() {
 	cfg := config.Load()
 
+	config.InitDB(cfg)
+	config.StartScheduler()
+
 	gin.SetMode(cfg.ServerMode)
 	r := gin.Default()
 
