@@ -22,6 +22,35 @@
 | Redis 容器 | ✅ | Docker 启动，6379 端口可连 |
 | CORS 跨域 | ✅ | 后端允许 `http://localhost:5173` |
 
+### ✅ 第四阶段：前端业务页面（已完成）
+
+目标：双端 H5/PC 页面，对接 HTTP 接口与 WebSocket 实时推送。
+
+| 模块 | 状态 | 说明 |
+|---|---|---|
+| 路由 | ✅ | `react-router-dom` 5 个路由 |
+| Tailwind CSS | ✅ | v4 + `@tailwindcss/vite`，零配置 |
+| axios 客户端 | ✅ | `src/api/client.ts`，统一 baseURL |
+| WebSocket 客户端 | ✅ | `src/lib/ws.ts`，5 次自动重连，间隔 3s |
+| user_id | ✅ | localStorage 持久化随机 ID |
+| 公共组件 | ✅ | `StatusBadge`、`Countdown`（最后 30s 变红） |
+| 商家列表 `/admin` | ✅ | 表格 + 按状态显示开始/取消按钮 |
+| 商家创建 `/admin/create` | ✅ | 表单 + 错误显示 + 跳转回列表 |
+| 用户大厅 `/` | ✅ | H5 卡片，过滤 active/pending |
+| 详情页 `/auction/:id` | ✅ | 实时刷新最高价/排行/倒计时；超越提示；结束页 |
+| 订单页 `/auction/:id/order` | ✅ | 模拟支付按钮 |
+| 生产构建 | ✅ | `npm run build` 通过，295KB JS / 22KB CSS |
+
+**重点：详情页的 WebSocket 行为**
+
+| WS 事件 | 页面反应 |
+|---|---|
+| `auction_started` | 状态变 active，开始倒计时 |
+| `new_bid` | 最高价数字黄色闪烁 + 排行刷新 + 倒计时同步；若我是 winner → 绿条「你正在领先」；若我曾出价但被超越 → 黄条「你被超越了」 |
+| `auction_finished` | 切换到结束页；赢家看到 🏆 + 「查看订单」按钮 |
+| `auction_cancelled` | 切换到 🚫 取消页 |
+| 断线 | 顶部显示「正在重连…」，5 次后才彻底放弃 |
+
 ### ✅ 第三阶段：WebSocket 实时通信（已完成）
 
 目标：在关键业务节点向所有在线客户端实时推送事件，替代轮询。
@@ -108,7 +137,6 @@ GET    /api/auctions/:id/order
 
 ### ⏳ 后续阶段（未开始）
 
-- **第四阶段**：前端业务页面（竞拍列表、详情、出价 UI），对接 WebSocket 实时刷新
 - **第五阶段**：用户系统（注册/登录、JWT 鉴权）
 - **第六阶段**：UI 美化、生产部署
 
@@ -149,10 +177,25 @@ auction-system/
 └── frontend/                  # React + TypeScript 前端
     ├── package.json
     ├── .env                   # VITE_API_BASE 指向后端
-    ├── vite.config.ts
+    ├── vite.config.ts         # 含 @tailwindcss/vite 插件
     └── src/
         ├── main.tsx
-        └── App.tsx            # 首页：调用 /health 并展示
+        ├── App.tsx            # BrowserRouter 路由表
+        ├── index.css          # Tailwind 入口 + flash 动画
+        ├── api/client.ts      # axios + ws URL 生成
+        ├── lib/
+        │   ├── types.ts       # Auction/Bid/Order/WSMessage 类型
+        │   ├── user.ts        # 随机 user_id（localStorage）
+        │   └── ws.ts          # AuctionWS：5 次自动重连
+        ├── components/
+        │   ├── StatusBadge.tsx
+        │   └── Countdown.tsx
+        └── pages/
+            ├── UserHall.tsx       # /
+            ├── AuctionDetail.tsx  # /auction/:id（含 WS 实时刷新）
+            ├── OrderPage.tsx      # /auction/:id/order
+            ├── AdminList.tsx      # /admin
+            └── AdminCreate.tsx    # /admin/create
 ```
 
 ---
@@ -356,6 +399,7 @@ A: 后端 `.env` 改完要重启 `go run`；前端 `.env` 改完要重启 `npm r
 
 ## 📅 更新记录
 
+- **2026-06-07** — 完成第四阶段：前端 5 个页面（商家 2 + 用户 3），Tailwind + react-router-dom + 实时 WebSocket 集成
 - **2026-06-07** — 完成第三阶段：WebSocket 实时通信，4 类事件接入，多客户端 E2E 验证通过
 - **2026-06-07** — 完成第二阶段：后端业务接口全部实现，含 9 条 API + 定时任务，E2E 测试通过
 - **2026-05-22** — 完成第一阶段：项目框架搭建、前后端联调成功
