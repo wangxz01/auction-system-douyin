@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"auction-system/backend/config"
+	"auction-system/backend/middleware"
 	"auction-system/backend/models"
 	"auction-system/backend/ws"
 
@@ -18,7 +19,6 @@ type topBidView struct {
 }
 
 type placeBidReq struct {
-	UserID uint    `json:"user_id"`
 	Amount float64 `json:"amount"`
 }
 
@@ -38,8 +38,9 @@ func PlaceBid(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误: " + err.Error()})
 		return
 	}
-	if req.UserID == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user_id 必填"})
+	uid, ok := middleware.UserIDFrom(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
 		return
 	}
 
@@ -77,7 +78,7 @@ func PlaceBid(c *gin.Context) {
 	}
 
 	// 写入 bids
-	bid := models.Bid{AuctionID: a.ID, UserID: req.UserID, Amount: req.Amount}
+	bid := models.Bid{AuctionID: a.ID, UserID: uid, Amount: req.Amount}
 	if err := config.DB.Create(&bid).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -85,7 +86,7 @@ func PlaceBid(c *gin.Context) {
 
 	// 更新 auction
 	a.CurrentPrice = req.Amount
-	winnerID := req.UserID
+	winnerID := uid
 	a.WinnerID = &winnerID
 
 	// 自动延时：距结束不足 30s 则延长 30s
@@ -116,7 +117,7 @@ func PlaceBid(c *gin.Context) {
 	})
 
 	if hitCeiling {
-		orderErr := createOrder(a.ID, req.UserID, req.Amount)
+		orderErr := createOrder(a.ID, uid, req.Amount)
 		// 无论订单是否成功（可能与定时器并发重复），都广播 finished
 		ws.H.Broadcast(a.ID, gin.H{
 			"type":        "auction_finished",

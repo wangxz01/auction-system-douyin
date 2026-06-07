@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Auction } from '../lib/types'
 import { StatusBadge } from '../components/StatusBadge'
-import { getUserId } from '../lib/user'
+import { clearAuth, getUser } from '../lib/auth'
 
 export function UserHall() {
+  const nav = useNavigate()
   const [auctions, setAuctions] = useState<Auction[]>([])
   const [loading, setLoading] = useState(true)
-  const uid = getUserId()
+  const me = getUser()
 
   useEffect(() => {
     api
@@ -24,9 +25,29 @@ export function UserHall() {
   return (
     <div className="min-h-screen bg-gray-50 max-w-md mx-auto">
       <header className="bg-gradient-to-r from-red-500 to-pink-500 text-white p-4 shadow">
-        <div className="flex justify-between items-baseline">
+        <div className="flex justify-between items-center">
           <h1 className="text-xl font-bold">🛒 拍卖大厅</h1>
-          <span className="text-xs opacity-80">UID: {uid}</span>
+          {me ? (
+            <div className="text-xs opacity-90 flex items-center gap-2">
+              <span>👤 {me.username}</span>
+              <button
+                onClick={() => {
+                  clearAuth()
+                  nav(0)
+                }}
+                className="bg-white/20 px-2 py-0.5 rounded"
+              >
+                退出
+              </button>
+            </div>
+          ) : (
+            <Link
+              to="/login"
+              className="bg-white text-red-500 px-3 py-1 rounded text-xs font-medium"
+            >
+              登录 / 注册
+            </Link>
+          )}
         </div>
         <p className="text-xs opacity-90 mt-1">实时竞拍 · 价高者得</p>
       </header>

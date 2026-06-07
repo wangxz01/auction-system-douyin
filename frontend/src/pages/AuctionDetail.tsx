@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
-import { getUserId } from '../lib/user'
+import { getUser, isLoggedIn } from '../lib/auth'
 import { AuctionWS } from '../lib/ws'
 import type { Auction, Bid, TopBid, WSMessage } from '../lib/types'
 import { Countdown } from '../components/Countdown'
@@ -14,7 +14,8 @@ export function AuctionDetail() {
   const { id } = useParams<{ id: string }>()
   const auctionId = Number(id)
   const navigate = useNavigate()
-  const uid = getUserId()
+  const me = getUser()
+  const uid = me?.user_id ?? 0
 
   const [auction, setAuction] = useState<Auction | null>(null)
   const [topBids, setTopBids] = useState<TopBid[]>([])
@@ -104,10 +105,14 @@ export function AuctionDetail() {
 
   const handleBid = async () => {
     if (!auction) return
+    if (!isLoggedIn()) {
+      const from = encodeURIComponent(`/auction/${auctionId}`)
+      navigate(`/login?from=${from}`)
+      return
+    }
     setSubmitting(true)
     try {
       await api.post(`/auctions/${auctionId}/bids`, {
-        user_id: uid,
         amount: nextBidAmount,
       })
       hasBidRef.current = true
@@ -298,7 +303,11 @@ export function AuctionDetail() {
             disabled={submitting}
             className="w-full bg-gradient-to-r from-red-500 to-pink-500 disabled:from-red-300 disabled:to-pink-300 text-white py-3 rounded-lg font-bold text-lg"
           >
-            {submitting ? '出价中...' : `立即出价 ¥${nextBidAmount}`}
+            {submitting
+              ? '出价中...'
+              : isLoggedIn()
+              ? `立即出价 ¥${nextBidAmount}`
+              : `登录后出价 ¥${nextBidAmount}`}
           </button>
         </div>
       )}

@@ -22,6 +22,43 @@
 | Redis 容器 | ✅ | Docker 启动，6379 端口可连 |
 | CORS 跨域 | ✅ | 后端允许 `http://localhost:5173` |
 
+### ✅ 第五阶段：用户系统（已完成）
+
+目标：真实注册/登录、JWT 鉴权、敏感接口保护、前端身份持久化。
+
+| 模块 | 状态 | 说明 |
+|---|---|---|
+| User 表加 PasswordHash | ✅ | bcrypt 哈希，`json:"-"` 防泄漏 |
+| `POST /api/auth/register` | ✅ | 用户名 2~32 字符；密码 ≥ 6 位；返回 token |
+| `POST /api/auth/login` | ✅ | bcrypt 比对；错误统一回「用户名或密码错误」 |
+| `GET /api/auth/me` | ✅ | 凭 JWT 返回当前用户信息 |
+| JWT 中间件 | ✅ | `middleware/auth.go`，签发 + 验证 + 注入 `user_id` 到 gin.Context |
+| 路由分组保护 | ✅ | GET 公开；POST 三类（创建/开始/取消/出价）需登录 |
+| place_bid 改用 JWT | ✅ | body 不再接收 user_id，从 token 取，**杜绝伪造身份** |
+| 前端 `lib/auth.ts` | ✅ | token/user 存 localStorage |
+| axios 拦截器 | ✅ | 自动附 `Authorization: Bearer xxx`；401 跳 `/login?from=...` |
+| `/login` 页 | ✅ | 登录/注册 tab 切换；登录后跳回原路径 |
+| `<RequireAuth>` 包裹 | ✅ | `/admin`、`/admin/create`、订单页未登录跳登录 |
+| 顶部用户名 + 退出 | ✅ | UserHall / AdminList 展示登录态 |
+
+**鉴权流程**
+
+```
+浏览器                                      后端
+  │  POST /api/auth/register {user,pw}      │
+  │ ───────────────────────────────────────►│ bcrypt 加密 + 入库
+  │                                         │ 签发 JWT (HS256, 72h)
+  │ ◄──────────────────────────────── {token}│
+  │  localStorage.setItem('auction_token')   │
+  │                                         │
+  │  POST /api/auctions/:id/bids             │
+  │  Authorization: Bearer <token>           │
+  │ ───────────────────────────────────────►│ 中间件验证 JWT
+  │                                         │ user_id 注入 context
+  │                                         │ 业务逻辑用 ctx 里的 uid
+  │ ◄────────────────────────── {data: ...}  │
+```
+
 ### ✅ 第四阶段：前端业务页面（已完成）
 
 目标：双端 H5/PC 页面，对接 HTTP 接口与 WebSocket 实时推送。
@@ -137,7 +174,6 @@ GET    /api/auctions/:id/order
 
 ### ⏳ 后续阶段（未开始）
 
-- **第五阶段**：用户系统（注册/登录、JWT 鉴权）
 - **第六阶段**：UI 美化、生产部署
 
 ---
@@ -161,10 +197,13 @@ auction-system/
 │   │   └── scheduler.go       # 5s 定时扫描过期竞拍
 │   ├── controllers/           # 接口处理函数
 │   │   ├── health_controller.go
+│   │   ├── auth.go            # 注册 / 登录 / 当前用户
 │   │   ├── auction.go         # 竞拍 CRUD + 开始/取消（含 WS 广播）
 │   │   ├── bid.go             # 出价 + Top10 排行（含 WS 广播）
 │   │   ├── order.go           # 查询订单 + 内部 createOrder
 │   │   └── ws.go              # WebSocket 升级 + 心跳泵
+│   ├── middleware/
+│   │   └── auth.go            # JWT 签发 + 验证中间件
 │   ├── ws/
 │   │   └── hub.go             # WebSocket 房间管理器（按 auction_id 分房）
 │   ├── routes/routes.go       # 路由注册 + CORS
@@ -182,20 +221,22 @@ auction-system/
         ├── main.tsx
         ├── App.tsx            # BrowserRouter 路由表
         ├── index.css          # Tailwind 入口 + flash 动画
-        ├── api/client.ts      # axios + ws URL 生成
+        ├── api/client.ts      # axios + ws URL 生成 + JWT 拦截器
         ├── lib/
         │   ├── types.ts       # Auction/Bid/Order/WSMessage 类型
-        │   ├── user.ts        # 随机 user_id（localStorage）
+        │   ├── auth.ts        # token / user 存 localStorage
         │   └── ws.ts          # AuctionWS：5 次自动重连
         ├── components/
         │   ├── StatusBadge.tsx
-        │   └── Countdown.tsx
+        │   ├── Countdown.tsx
+        │   └── RequireAuth.tsx    # 未登录跳 /login 的路由守卫
         └── pages/
             ├── UserHall.tsx       # /
+            ├── Login.tsx          # /login（登录/注册 tab）
             ├── AuctionDetail.tsx  # /auction/:id（含 WS 实时刷新）
             ├── OrderPage.tsx      # /auction/:id/order
-            ├── AdminList.tsx      # /admin
-            └── AdminCreate.tsx    # /admin/create
+            ├── AdminList.tsx      # /admin（需登录）
+            └── AdminCreate.tsx    # /admin/create（需登录）
 ```
 
 ---
@@ -246,15 +287,16 @@ auction-system/
 | `status` | varchar(16) | — | 默认 pending（后续可扩 paid/shipped） |
 | `created_at`/`updated_at` | datetime(3) | — | 时间戳 |
 
-### `users`（用户表，占位）
+### `users`（用户表）
 
 | 字段 | 类型 | 索引 | 说明 |
 |---|---|---|---|
 | `id` | bigint unsigned | PK | |
-| `username` | varchar(64) | UNIQUE | 用户名 |
+| `username` | varchar(64) | UNIQUE | 用户名，2–32 字符 |
+| `password_hash` | varchar(128) | — | bcrypt 哈希，JSON 序列化时被 `json:"-"` 隐藏 |
 | `created_at`/`updated_at` | datetime(3) | — | |
 
-> 当前业务不依赖用户记录（user_id 由前端直传），表先占位。后续接入注册/登录时再补 `password_hash`、`email` 等字段。
+> 注册 / 登录 / JWT 鉴权由 `controllers/auth.go` + `middleware/auth.go` 提供。
 
 ### 状态机
 
@@ -399,6 +441,7 @@ A: 后端 `.env` 改完要重启 `go run`；前端 `.env` 改完要重启 `npm r
 
 ## 📅 更新记录
 
+- **2026-06-07** — 完成第五阶段：用户系统（JWT + bcrypt），敏感接口加鉴权，前端 /login 页 + 路由守卫
 - **2026-06-07** — 完成第四阶段：前端 5 个页面（商家 2 + 用户 3），Tailwind + react-router-dom + 实时 WebSocket 集成
 - **2026-06-07** — 完成第三阶段：WebSocket 实时通信，4 类事件接入，多客户端 E2E 验证通过
 - **2026-06-07** — 完成第二阶段：后端业务接口全部实现，含 9 条 API + 定时任务，E2E 测试通过

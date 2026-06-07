@@ -21,6 +21,9 @@ type Config struct {
 	RedisPort     string
 	RedisPassword string
 	RedisDB       string
+
+	JWTSecret      string
+	JWTExpireHours string
 }
 
 func Load() *Config {
@@ -38,8 +41,10 @@ func Load() *Config {
 		DBName:        getEnv("DB_NAME", "auction"),
 		RedisHost:     getEnv("REDIS_HOST", "127.0.0.1"),
 		RedisPort:     getEnv("REDIS_PORT", "6379"),
-		RedisPassword: getEnv("REDIS_PASSWORD", ""),
-		RedisDB:       getEnv("REDIS_DB", "0"),
+		RedisPassword:  getEnv("REDIS_PASSWORD", ""),
+		RedisDB:        getEnv("REDIS_DB", "0"),
+		JWTSecret:      getEnv("JWT_SECRET", "dev-only-do-not-use-in-prod"),
+		JWTExpireHours: getEnv("JWT_EXPIRE_HOURS", "72"),
 	}
 }
 

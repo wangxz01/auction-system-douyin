@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Auction } from '../lib/types'
 import { StatusBadge } from '../components/StatusBadge'
+import { clearAuth, getUser } from '../lib/auth'
 
 export function AdminList() {
+  const nav = useNavigate()
+  const me = getUser()
   const [auctions, setAuctions] = useState<Auction[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -48,6 +51,20 @@ export function AdminList() {
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <h1 className="text-xl font-bold">🛠️ 商家后台 · 竞拍管理</h1>
           <div className="flex items-center gap-3">
+            {me && (
+              <span className="text-sm text-gray-500">
+                👤 {me.username}
+                <button
+                  onClick={() => {
+                    clearAuth()
+                    nav('/login')
+                  }}
+                  className="ml-2 text-xs text-gray-400 hover:text-gray-600"
+                >
+                  退出
+                </button>
+              </span>
+            )}
             <Link to="/" className="text-sm text-gray-500 hover:text-gray-700">
               → 用户端
             </Link>
