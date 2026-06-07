@@ -1,18 +1,228 @@
 @import "tailwindcss";
 
+@theme {
+  --color-warm-50:  #FFFBF2;
+  --color-warm-100: #FFF4D9;
+  --color-warm-200: #FFE9B0;
+  --color-accent-300: #FFDF7A;
+  --color-accent-400: #FFCC4D;
+  --color-accent-500: #FFB627;
+  --color-accent-600: #FF9500;
+  --color-accent-700: #E07B00;
+  --color-ink-900: #1d1d1f;
+  --color-ink-700: #4a4a52;
+  --color-ink-500: #86868b;
+  --color-ink-400: #a6a6ad;
+
+  --font-display: -apple-system, BlinkMacSystemFont, "PingFang SC", "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
 html, body, #root {
   margin: 0;
   padding: 0;
   min-height: 100vh;
-  background: #f3f4f6;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-display);
+  color: #1d1d1f;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-@keyframes flash {
-  0%   { background-color: rgba(250, 204, 21, 0.6); }
-  100% { background-color: transparent; }
+/* === 液态玻璃背景：暖色 mesh gradient + 微噪声 === */
+body {
+  background:
+    radial-gradient(at 8% 0%,  hsla(40, 95%, 80%, 0.55) 0%, transparent 45%),
+    radial-gradient(at 92% 12%, hsla(20, 95%, 82%, 0.50) 0%, transparent 50%),
+    radial-gradient(at 50% 100%, hsla(48, 100%, 85%, 0.6) 0%, transparent 55%),
+    radial-gradient(at 75% 60%, hsla(340, 80%, 88%, 0.40) 0%, transparent 60%),
+    #faf7f2;
+  background-attachment: fixed;
+}
+
+/* === Liquid Glass 主类 === */
+.glass {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.1),
+    0 6px 22px rgba(180, 130, 60, 0.10),
+    0 1px 4px rgba(180, 130, 60, 0.06);
+}
+
+.glass-strong {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(36px) saturate(200%);
+  -webkit-backdrop-filter: blur(36px) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 10px 36px rgba(160, 120, 50, 0.12);
+}
+
+.glass-soft {
+  background: rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+}
+
+.glass-warm {
+  background: linear-gradient(135deg,
+    rgba(255, 220, 130, 0.45),
+    rgba(255, 180, 100, 0.30)
+  );
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 220, 130, 0.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 8px 28px rgba(255, 170, 50, 0.18);
+}
+
+/* === 强调按钮（黄色渐变，立体高光） === */
+.btn-accent {
+  position: relative;
+  background: linear-gradient(135deg, #FFD451 0%, #FFB627 50%, #FF9500 100%);
+  color: #3a2a00;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -1px 0 rgba(180, 100, 0, 0.25),
+    0 6px 18px rgba(255, 152, 0, 0.4),
+    0 2px 6px rgba(255, 152, 0, 0.25);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.btn-accent:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -1px 0 rgba(180, 100, 0, 0.25),
+    0 10px 24px rgba(255, 152, 0, 0.5),
+    0 3px 8px rgba(255, 152, 0, 0.3);
+}
+.btn-accent:active:not(:disabled) {
+  transform: translateY(0);
+}
+.btn-accent:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* === 玻璃按钮（次要操作） === */
+.btn-glass {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  color: #1d1d1f;
+  font-weight: 500;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 2px 8px rgba(0, 0, 0, 0.05);
+  transition: background 0.15s ease;
+}
+.btn-glass:hover { background: rgba(255, 255, 255, 0.8); }
+
+/* === 危险按钮 === */
+.btn-danger {
+  background: linear-gradient(135deg, #FF8A85, #FF5C5C);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    0 4px 14px rgba(255, 92, 92, 0.4);
+}
+
+/* === FAB（悬浮加号按钮） === */
+.fab {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #FFD451 0%, #FF9500 100%);
+  color: #3a2a00;
+  font-size: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 8px 28px rgba(255, 149, 0, 0.45),
+    0 2px 8px rgba(255, 149, 0, 0.3);
+  transition: transform 0.15s ease;
+}
+.fab:hover { transform: scale(1.06); }
+.fab:active { transform: scale(0.96); }
+
+/* === Pill 切换 === */
+.pill-group {
+  display: inline-flex;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 9999px;
+  backdrop-filter: blur(20px) saturate(180%);
+}
+.pill-tab {
+  padding: 6px 18px;
+  border-radius: 9999px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #86868b;
+  transition: all 0.2s ease;
+}
+.pill-tab[data-active="true"] {
+  background: white;
+  color: #FF9500;
+  font-weight: 600;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 2px 8px rgba(255, 149, 0, 0.18);
+}
+
+/* === 输入框 === */
+.input-glass {
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  border-radius: 12px;
+  padding: 10px 14px;
+  width: 100%;
+  font-size: 15px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.input-glass:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.85);
+  border-color: #FFB627;
+  box-shadow: 0 0 0 3px rgba(255, 182, 39, 0.2);
+}
+
+/* === 价格闪烁动画 === */
+@keyframes flash-pop {
+  0%   { background-color: rgba(255, 200, 50, 0.65); transform: scale(1.05); }
+  100% { background-color: transparent; transform: scale(1); }
 }
 .flash {
-  animation: flash 0.6s ease-out;
+  animation: flash-pop 0.6s ease-out;
+  border-radius: 12px;
+}
+
+/* === 渐显进入 === */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-up { animation: fade-up 0.35s ease-out both; }
+
+/* === 滚动条美化 === */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb {
+  background: rgba(180, 130, 60, 0.25);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(180, 130, 60, 0.4);
 }

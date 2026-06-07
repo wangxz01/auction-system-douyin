@@ -23,19 +23,26 @@ export function UserHall() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-gray-50 max-w-md mx-auto">
-      <header className="bg-gradient-to-r from-red-500 to-pink-500 text-white p-4 shadow">
-        <div className="flex justify-between items-center">
-          <h1 className="text-xl font-bold">🛒 拍卖大厅</h1>
+    <div className="min-h-screen max-w-md mx-auto px-4 pb-12">
+      {/* 顶部玻璃栏 */}
+      <header className="sticky top-3 z-20 mt-3">
+        <div className="glass rounded-3xl px-4 py-3 flex items-center justify-between">
+          <div>
+            <h1 className="text-lg font-bold tracking-tight">🛒 拍卖大厅</h1>
+            <p className="text-[11px] text-ink-500">实时竞拍 · 价高者得</p>
+          </div>
           {me ? (
-            <div className="text-xs opacity-90 flex items-center gap-2">
-              <span>👤 {me.username}</span>
+            <div className="flex items-center gap-2">
+              <div className="text-right">
+                <div className="text-xs text-ink-500">登录为</div>
+                <div className="text-sm font-medium text-ink-900">{me.username}</div>
+              </div>
               <button
                 onClick={() => {
                   clearAuth()
                   nav(0)
                 }}
-                className="bg-white/20 px-2 py-0.5 rounded"
+                className="btn-glass px-3 py-1.5 rounded-full text-xs"
               >
                 退出
               </button>
@@ -43,56 +50,67 @@ export function UserHall() {
           ) : (
             <Link
               to="/login"
-              className="bg-white text-red-500 px-3 py-1 rounded text-xs font-medium"
+              className="btn-accent px-4 py-2 rounded-full text-sm"
             >
               登录 / 注册
             </Link>
           )}
         </div>
-        <p className="text-xs opacity-90 mt-1">实时竞拍 · 价高者得</p>
       </header>
 
+      {/* 商家入口 */}
       <Link
         to="/admin"
-        className="block text-center text-xs text-gray-400 py-2 hover:text-gray-600"
+        className="block text-center text-xs text-ink-400 py-3 hover:text-ink-700"
       >
-        → 商家后台
+        → 进入商家后台
       </Link>
 
-      <div className="p-3 space-y-3">
-        {loading && <div className="text-center text-gray-400 py-12">加载中...</div>}
-        {!loading && auctions.length === 0 && (
-          <div className="text-center text-gray-400 py-12">暂无进行中的竞拍</div>
+      {/* 列表 */}
+      <div className="space-y-3">
+        {loading && (
+          <div className="glass rounded-2xl p-12 text-center text-ink-400">
+            加载中...
+          </div>
         )}
-        {auctions.map((a) => (
+        {!loading && auctions.length === 0 && (
+          <div className="glass rounded-2xl p-12 text-center text-ink-400">
+            <div className="text-5xl mb-2">📭</div>
+            <div className="text-sm">暂无进行中的竞拍</div>
+          </div>
+        )}
+        {auctions.map((a, idx) => (
           <Link
             key={a.id}
             to={`/auction/${a.id}`}
-            className="block bg-white rounded-lg shadow-sm overflow-hidden active:scale-[0.98] transition"
+            className="block glass rounded-3xl overflow-hidden fade-up active:scale-[0.98] transition-transform"
+            style={{ animationDelay: `${idx * 40}ms` }}
           >
             <div className="flex">
               {a.image_url ? (
                 <img
                   src={a.image_url}
                   alt={a.title}
-                  className="w-24 h-24 object-cover bg-gray-100"
+                  className="w-28 h-28 object-cover"
                   onError={(e) => {
                     ;(e.currentTarget as HTMLImageElement).style.display = 'none'
                   }}
                 />
               ) : (
-                <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-gray-400">
+                <div className="w-28 h-28 flex items-center justify-center text-3xl bg-gradient-to-br from-amber-200/60 to-orange-200/60">
                   📦
                 </div>
               )}
-              <div className="flex-1 p-3 flex flex-col justify-between">
+              <div className="flex-1 p-3.5 flex flex-col justify-between">
                 <div className="flex items-start justify-between gap-2">
-                  <h2 className="font-medium leading-tight">{a.title}</h2>
+                  <h2 className="font-semibold leading-snug text-ink-900">{a.title}</h2>
                   <StatusBadge status={a.status} />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">当前价</p>
-                  <p className="text-red-500 text-xl font-bold">¥{a.current_price}</p>
+                  <p className="text-[11px] text-ink-500">当前价</p>
+                  <p className="text-2xl font-bold text-accent-600">
+                    ¥{a.current_price}
+                  </p>
                 </div>
               </div>
             </div>

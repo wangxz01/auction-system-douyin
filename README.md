@@ -22,6 +22,24 @@
 | Redis 容器 | ✅ | Docker 启动，6379 端口可连 |
 | CORS 跨域 | ✅ | 后端允许 `http://localhost:5173` |
 
+### ✅ 第六阶段：UI 美化 · 液态玻璃风（已完成）
+
+目标：把前端从「能用」升级到「好看」——参考截图的暖色调极简风 + iOS 26 液态玻璃。
+
+| 模块 | 状态 | 说明 |
+|---|---|---|
+| 设计系统 | ✅ | `index.css` 集中定义颜色 token / 玻璃工具类 / 按钮 / FAB |
+| 暖色 mesh 背景 | ✅ | 4 层径向渐变（暖黄/暖橙/粉/暖白），fixed 不滚 |
+| `.glass` 工具类 | ✅ | `backdrop-filter: blur(24px) saturate(180%)` + 内嵌高光 |
+| `.glass-strong` / `.glass-warm` / `.glass-soft` | ✅ | 不同强度变体 |
+| `.btn-accent` | ✅ | 黄橙渐变 + 内外阴影 + hover 上浮 |
+| `.fab` | ✅ | 商家列表悬浮加号按钮 |
+| `.pill-group` / `.pill-tab` | ✅ | 登录页登录/注册切换 |
+| 配色统一 | ✅ | 主色 `#FFB627`/`#FF9500`；StatusBadge 改用玻璃色彩 |
+| 微动效 | ✅ | `flash-pop`（出价后价格高亮）+ `fade-up`（卡片进场） |
+| 6 个页面全部重做 | ✅ | UserHall / AuctionDetail / OrderPage / AdminList / AdminCreate / Login |
+| 生产构建 | ✅ | 302 KB JS / 30 KB CSS |
+
 ### ✅ 第五阶段：用户系统（已完成）
 
 目标：真实注册/登录、JWT 鉴权、敏感接口保护、前端身份持久化。
@@ -174,7 +192,7 @@ GET    /api/auctions/:id/order
 
 ### ⏳ 后续阶段（未开始）
 
-- **第六阶段**：UI 美化、生产部署
+- **第七阶段**：生产部署（Dockerfile + Nginx + 域名 + HTTPS）
 
 ---
 
@@ -441,6 +459,7 @@ A: 后端 `.env` 改完要重启 `go run`；前端 `.env` 改完要重启 `npm r
 
 ## 📅 更新记录
 
+- **2026-06-07** — 完成第六阶段：UI 全面升级，液态玻璃 + 暖色 mesh 背景 + 黄橙 accent 配色
 - **2026-06-07** — 完成第五阶段：用户系统（JWT + bcrypt），敏感接口加鉴权，前端 /login 页 + 路由守卫
 - **2026-06-07** — 完成第四阶段：前端 5 个页面（商家 2 + 用户 3），Tailwind + react-router-dom + 实时 WebSocket 集成
 - **2026-06-07** — 完成第三阶段：WebSocket 实时通信，4 类事件接入，多客户端 E2E 验证通过

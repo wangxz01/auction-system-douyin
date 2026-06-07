@@ -46,74 +46,87 @@ export function AdminList() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <header className="bg-white shadow-sm">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <h1 className="text-xl font-bold">🛠️ 商家后台 · 竞拍管理</h1>
+    <div className="min-h-screen max-w-6xl mx-auto px-4 pb-12">
+      <header className="sticky top-3 z-20 mt-3">
+        <div className="glass rounded-3xl px-5 py-3 flex items-center justify-between">
+          <div>
+            <h1 className="text-lg font-bold tracking-tight">🛠️ 商家后台</h1>
+            <p className="text-[11px] text-ink-500">竞拍商品管理</p>
+          </div>
           <div className="flex items-center gap-3">
             {me && (
-              <span className="text-sm text-gray-500">
-                👤 {me.username}
+              <div className="flex items-center gap-2 text-sm text-ink-500">
+                <span>👤 {me.username}</span>
                 <button
                   onClick={() => {
                     clearAuth()
                     nav('/login')
                   }}
-                  className="ml-2 text-xs text-gray-400 hover:text-gray-600"
+                  className="btn-glass px-3 py-1 rounded-full text-xs"
                 >
                   退出
                 </button>
-              </span>
+              </div>
             )}
-            <Link to="/" className="text-sm text-gray-500 hover:text-gray-700">
-              → 用户端
-            </Link>
             <Link
-              to="/admin/create"
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium"
+              to="/"
+              className="text-xs text-ink-400 hover:text-ink-700"
             >
-              + 发布新竞拍
+              → 用户端
             </Link>
           </div>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto p-6">
-        {loading && <div className="text-center text-gray-400 py-12">加载中...</div>}
-        {error && <div className="text-center text-red-500 py-12">错误: {error}</div>}
+      <main className="mt-4">
+        {loading && (
+          <div className="glass rounded-2xl p-12 text-center text-ink-400">加载中...</div>
+        )}
+        {error && (
+          <div className="glass rounded-2xl p-12 text-center text-rose-500">
+            错误: {error}
+          </div>
+        )}
         {!loading && !error && (
-          <div className="bg-white rounded-lg shadow overflow-x-auto">
+          <div className="glass-strong rounded-3xl overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-gray-600">
-                <tr>
-                  <th className="px-4 py-3 text-left">ID</th>
-                  <th className="px-4 py-3 text-left">商品</th>
-                  <th className="px-4 py-3 text-right">起拍价</th>
-                  <th className="px-4 py-3 text-right">加价幅度</th>
-                  <th className="px-4 py-3 text-right">当前价</th>
-                  <th className="px-4 py-3 text-center">状态</th>
-                  <th className="px-4 py-3 text-right">操作</th>
+              <thead>
+                <tr className="text-ink-500">
+                  <th className="px-4 py-3 text-left font-medium">ID</th>
+                  <th className="px-4 py-3 text-left font-medium">商品</th>
+                  <th className="px-4 py-3 text-right font-medium">起拍价</th>
+                  <th className="px-4 py-3 text-right font-medium">加价幅度</th>
+                  <th className="px-4 py-3 text-right font-medium">当前价</th>
+                  <th className="px-4 py-3 text-center font-medium">状态</th>
+                  <th className="px-4 py-3 text-right font-medium">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {auctions.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-gray-400">
-                      暂无竞拍，点击右上角创建
+                    <td colSpan={7} className="px-4 py-16 text-center text-ink-400">
+                      <div className="text-5xl mb-2">📦</div>
+                      暂无竞拍，点击右下角 ＋ 创建
                     </td>
                   </tr>
                 )}
                 {auctions.map((a) => (
-                  <tr key={a.id} className="border-t border-gray-100 hover:bg-gray-50">
-                    <td className="px-4 py-3 text-gray-500">#{a.id}</td>
+                  <tr
+                    key={a.id}
+                    className="border-t border-white/60 hover:bg-white/40 transition-colors"
+                  >
+                    <td className="px-4 py-3 text-ink-400">#{a.id}</td>
                     <td className="px-4 py-3">
-                      <Link to={`/auction/${a.id}`} className="font-medium hover:text-blue-600">
+                      <Link
+                        to={`/auction/${a.id}`}
+                        className="font-medium hover:text-accent-600"
+                      >
                         {a.title}
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-right">¥{a.start_price}</td>
-                    <td className="px-4 py-3 text-right">¥{a.price_step}</td>
-                    <td className="px-4 py-3 text-right text-red-600 font-semibold">
+                    <td className="px-4 py-3 text-right text-ink-700">¥{a.start_price}</td>
+                    <td className="px-4 py-3 text-right text-ink-700">¥{a.price_step}</td>
+                    <td className="px-4 py-3 text-right text-accent-600 font-semibold">
                       ¥{a.current_price}
                     </td>
                     <td className="px-4 py-3 text-center">
@@ -124,13 +137,13 @@ export function AdminList() {
                         <div className="flex justify-end gap-2">
                           <button
                             onClick={() => handleStart(a.id)}
-                            className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs"
+                            className="btn-accent px-3 py-1.5 rounded-full text-xs"
                           >
                             开始
                           </button>
                           <button
                             onClick={() => handleCancel(a.id)}
-                            className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-3 py-1 rounded text-xs"
+                            className="btn-glass px-3 py-1.5 rounded-full text-xs"
                           >
                             取消
                           </button>
@@ -139,13 +152,13 @@ export function AdminList() {
                       {a.status === 'active' && (
                         <button
                           onClick={() => handleCancel(a.id)}
-                          className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs"
+                          className="btn-danger px-3 py-1.5 rounded-full text-xs"
                         >
                           取消竞拍
                         </button>
                       )}
                       {(a.status === 'finished' || a.status === 'cancelled') && (
-                        <span className="text-gray-300">—</span>
+                        <span className="text-ink-400">—</span>
                       )}
                     </td>
                   </tr>
@@ -155,6 +168,16 @@ export function AdminList() {
           </div>
         )}
       </main>
+
+      {/* 悬浮加号按钮 */}
+      <button
+        onClick={() => nav('/admin/create')}
+        className="fab fixed bottom-6 right-6 z-30"
+        aria-label="发布新竞拍"
+        title="发布新竞拍"
+      >
+        +
+      </button>
     </div>
   )
 }
