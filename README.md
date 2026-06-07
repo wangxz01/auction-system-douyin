@@ -22,6 +22,51 @@
 | Redis 容器 | ✅ | Docker 启动，6379 端口可连 |
 | CORS 跨域 | ✅ | 后端允许 `http://localhost:5173` |
 
+### ✅ 第三阶段：WebSocket 实时通信（已完成）
+
+目标：在关键业务节点向所有在线客户端实时推送事件，替代轮询。
+
+| 模块 | 状态 | 说明 |
+|---|---|---|
+| Hub 房间管理器 | ✅ | `ws/hub.go`，按 `auction_id` 分房间，goroutine + channel 串行化所有操作 |
+| WS 连接接口 | ✅ | `controllers/ws.go`，HTTP → WebSocket 升级，readPump/writePump 双 goroutine |
+| 心跳保活 | ✅ | 每 30s ping，60s 无消息断开 |
+| 事件广播 | ✅ | start / cancel / new_bid / finished 四类事件接入 |
+| 路由 | ✅ | `GET /ws/auctions/:id` |
+| E2E 测试 | ✅ | 两个客户端并发订阅，验证广播、断开互不影响 |
+
+**事件消息格式**
+
+```jsonc
+// 竞拍开始
+{"type":"auction_started","auction_id":1,"ends_at":"..."}
+
+// 新出价（每次出价后广播）
+{"type":"new_bid","auction_id":1,"current_price":130,"winner_id":2,
+ "ends_at":"...","top_bids":[{"user_id":2,"amount":130},...]}
+
+// 竞拍结束（封顶价命中 或 定时器到期触发）
+{"type":"auction_finished","auction_id":1,"final_price":150,"winner_id":3}
+
+// 竞拍取消
+{"type":"auction_cancelled","auction_id":1}
+```
+
+**前端连接方式**
+
+```js
+const ws = new WebSocket(`ws://localhost:8080/ws/auctions/${auctionID}`)
+ws.onmessage = (e) => {
+  const msg = JSON.parse(e.data)
+  switch (msg.type) {
+    case 'auction_started':   /* ... */ break
+    case 'new_bid':           /* ... */ break
+    case 'auction_finished':  /* ... */ break
+    case 'auction_cancelled': /* ... */ break
+  }
+}
+```
+
 ### ✅ 第二阶段：后端业务接口（已完成）
 
 目标：实现拍卖系统全部核心后端接口，含数据库连接、模型、竞拍/出价/订单业务、定时任务。
@@ -63,8 +108,7 @@ GET    /api/auctions/:id/order
 
 ### ⏳ 后续阶段（未开始）
 
-- **第三阶段**：前端业务页面（竞拍列表、详情、出价 UI）
-- **第四阶段**：WebSocket 实时出价推送（替代轮询）
+- **第四阶段**：前端业务页面（竞拍列表、详情、出价 UI），对接 WebSocket 实时刷新
 - **第五阶段**：用户系统（注册/登录、JWT 鉴权）
 - **第六阶段**：UI 美化、生产部署
 
@@ -89,9 +133,12 @@ auction-system/
 │   │   └── scheduler.go       # 5s 定时扫描过期竞拍
 │   ├── controllers/           # 接口处理函数
 │   │   ├── health_controller.go
-│   │   ├── auction.go         # 竞拍 CRUD + 开始/取消
-│   │   ├── bid.go             # 出价 + Top10 排行
-│   │   └── order.go           # 查询订单 + 内部 createOrder
+│   │   ├── auction.go         # 竞拍 CRUD + 开始/取消（含 WS 广播）
+│   │   ├── bid.go             # 出价 + Top10 排行（含 WS 广播）
+│   │   ├── order.go           # 查询订单 + 内部 createOrder
+│   │   └── ws.go              # WebSocket 升级 + 心跳泵
+│   ├── ws/
+│   │   └── hub.go             # WebSocket 房间管理器（按 auction_id 分房）
 │   ├── routes/routes.go       # 路由注册 + CORS
 │   └── models/                # 数据模型
 │       ├── user.go
@@ -309,6 +356,7 @@ A: 后端 `.env` 改完要重启 `go run`；前端 `.env` 改完要重启 `npm r
 
 ## 📅 更新记录
 
+- **2026-06-07** — 完成第三阶段：WebSocket 实时通信，4 类事件接入，多客户端 E2E 验证通过
 - **2026-06-07** — 完成第二阶段：后端业务接口全部实现，含 9 条 API + 定时任务，E2E 测试通过
 - **2026-05-22** — 完成第一阶段：项目框架搭建、前后端联调成功
 

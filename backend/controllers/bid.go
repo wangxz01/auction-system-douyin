@@ -7,9 +7,15 @@ import (
 
 	"auction-system/backend/config"
 	"auction-system/backend/models"
+	"auction-system/backend/ws"
 
 	"github.com/gin-gonic/gin"
 )
+
+type topBidView struct {
+	UserID uint    `json:"user_id"`
+	Amount float64 `json:"amount"`
+}
 
 type placeBidReq struct {
 	UserID uint    `json:"user_id"`
@@ -99,15 +105,32 @@ func PlaceBid(c *gin.Context) {
 		return
 	}
 
+	// 广播 new_bid：包含最新 top5 排行
+	ws.H.Broadcast(a.ID, gin.H{
+		"type":          "new_bid",
+		"auction_id":    a.ID,
+		"current_price": a.CurrentPrice,
+		"winner_id":     a.WinnerID,
+		"ends_at":       a.EndsAt,
+		"top_bids":      fetchTopBids(a.ID, 5),
+	})
+
 	if hitCeiling {
-		if err := createOrder(a.ID, req.UserID, req.Amount); err != nil {
-			// 订单已存在等错误不阻断出价响应
+		orderErr := createOrder(a.ID, req.UserID, req.Amount)
+		// 无论订单是否成功（可能与定时器并发重复），都广播 finished
+		ws.H.Broadcast(a.ID, gin.H{
+			"type":        "auction_finished",
+			"auction_id":  a.ID,
+			"final_price": a.CurrentPrice,
+			"winner_id":   a.WinnerID,
+		})
+		if orderErr != nil {
 			c.JSON(http.StatusOK, gin.H{"data": gin.H{
 				"message":       "出价成功（已触达封顶价，但订单创建异常）",
 				"current_price": a.CurrentPrice,
 				"ends_at":       a.EndsAt,
 				"finished":      true,
-				"order_error":   err.Error(),
+				"order_error":   orderErr.Error(),
 			}})
 			return
 		}
@@ -119,6 +142,20 @@ func PlaceBid(c *gin.Context) {
 		"ends_at":       a.EndsAt,
 		"finished":      hitCeiling,
 	}})
+}
+
+func fetchTopBids(auctionID uint, limit int) []topBidView {
+	var bids []models.Bid
+	config.DB.
+		Where("auction_id = ?", auctionID).
+		Order("amount DESC").
+		Limit(limit).
+		Find(&bids)
+	out := make([]topBidView, len(bids))
+	for i, b := range bids {
+		out[i] = topBidView{UserID: b.UserID, Amount: b.Amount}
+	}
+	return out
 }
 
 func GetBids(c *gin.Context) {

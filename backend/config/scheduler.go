@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"auction-system/backend/models"
+	"auction-system/backend/ws"
 )
 
 // StartScheduler 启动一个后台 goroutine，每 5 秒扫描一次过期的 active 竞拍。
@@ -41,14 +42,28 @@ func sweepExpired() {
 		if res.RowsAffected == 0 {
 			continue
 		}
-		if a.WinnerID != nil {
-			if err := models.CreateOrderForAuction(DB, a.ID, *a.WinnerID, a.CurrentPrice); err != nil {
-				log.Printf("scheduler 生成订单失败 auction=%d: %v", a.ID, err)
+
+		// 重新查最新数据用于广播（CurrentPrice 可能在快照后被更新）
+		var fresh models.Auction
+		if err := DB.First(&fresh, a.ID).Error; err != nil {
+			fresh = a
+		}
+
+		if fresh.WinnerID != nil {
+			if err := models.CreateOrderForAuction(DB, fresh.ID, *fresh.WinnerID, fresh.CurrentPrice); err != nil {
+				log.Printf("scheduler 生成订单失败 auction=%d: %v", fresh.ID, err)
 			} else {
-				log.Printf("⏰ 竞拍 %d 到期结束，生成订单成功", a.ID)
+				log.Printf("⏰ 竞拍 %d 到期结束，生成订单成功", fresh.ID)
 			}
 		} else {
-			log.Printf("⏰ 竞拍 %d 到期结束，无人出价不生成订单", a.ID)
+			log.Printf("⏰ 竞拍 %d 到期结束，无人出价不生成订单", fresh.ID)
 		}
+
+		ws.H.Broadcast(fresh.ID, map[string]any{
+			"type":        "auction_finished",
+			"auction_id":  fresh.ID,
+			"final_price": fresh.CurrentPrice,
+			"winner_id":   fresh.WinnerID,
+		})
 	}
 }

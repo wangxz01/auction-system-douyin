@@ -5,6 +5,7 @@ import (
 
 	"auction-system/backend/config"
 	"auction-system/backend/routes"
+	"auction-system/backend/ws"
 
 	"github.com/gin-gonic/gin"
 )
@@ -13,6 +14,7 @@ func main() {
 	cfg := config.Load()
 
 	config.InitDB(cfg)
+	ws.InitHub()
 	config.StartScheduler()
 
 	gin.SetMode(cfg.ServerMode)

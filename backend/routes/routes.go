@@ -16,6 +16,9 @@ func Register(r *gin.Engine) {
 
 	r.GET("/health", controllers.Health)
 
+	// WebSocket 实时通道：每个 auction_id 独立房间
+	r.GET("/ws/auctions/:id", controllers.HandleWS)
+
 	api := r.Group("/api")
 	{
 		api.POST("/auctions", controllers.CreateAuction)

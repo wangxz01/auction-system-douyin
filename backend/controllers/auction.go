@@ -7,6 +7,7 @@ import (
 
 	"auction-system/backend/config"
 	"auction-system/backend/models"
+	"auction-system/backend/ws"
 
 	"github.com/gin-gonic/gin"
 )
@@ -109,6 +110,11 @@ func StartAuction(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	ws.H.Broadcast(a.ID, gin.H{
+		"type":       "auction_started",
+		"auction_id": a.ID,
+		"ends_at":    a.EndsAt,
+	})
 	c.JSON(http.StatusOK, gin.H{"data": a})
 }
 
@@ -132,6 +138,10 @@ func CancelAuction(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	ws.H.Broadcast(a.ID, gin.H{
+		"type":       "auction_cancelled",
+		"auction_id": a.ID,
+	})
 	c.JSON(http.StatusOK, gin.H{"data": a})
 }
 
