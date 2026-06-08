@@ -7,7 +7,7 @@ const STYLES: Record<AuctionStatus, { label: string; cls: string }> = {
   },
   active: {
     label: '进行中',
-    cls: 'bg-gradient-to-br from-amber-300 to-orange-400 text-amber-900 border-amber-300',
+    cls: 'bg-app-100 text-accent-600 border-app-200',
   },
   finished: {
     label: '已结束',
