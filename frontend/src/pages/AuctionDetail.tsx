@@ -4,7 +4,7 @@ import Hls from 'hls.js'
 import { api } from '../api/client'
 import { getUser, isLoggedIn } from '../lib/auth'
 import { AuctionWS } from '../lib/ws'
-import type { Auction, AuctionComment, Bid, TopBid, WSMessage } from '../lib/types'
+import type { Auction, AuctionComment, AuctionStats, Bid, TopBid, WSMessage } from '../lib/types'
 
 // 兜底本地视频（放在 public/ 下，可被 / 直接访问）
 const FALLBACK_VIDEO = '/live.mp4'
@@ -27,15 +27,18 @@ export function AuctionDetail() {
   const [toast, setToast] = useState<Toast>(null)
   const [finished, setFinished] = useState<FinishedInfo>(null)
   const [cancelled, setCancelled] = useState(false)
-  const [secLeft, setSecLeft] = useState(0)
+  const [msLeft, setMsLeft] = useState(0)
   const [comments, setComments] = useState<AuctionComment[]>([])
+  const [participantCount, setParticipantCount] = useState(0)
 
   const hasBidRef = useRef(false)
   const toastIdRef = useRef(0)
+  const serverOffsetRef = useRef(0)
+  const lastBidAtRef = useRef(0)
   const videoRef = useRef<HTMLVideoElement>(null)
-  const backdropRef = useRef<HTMLVideoElement>(null)
   const [videoLoading, setVideoLoading] = useState(true)
   const [usingFallback, setUsingFallback] = useState(false)
+  const [backdropSrc, setBackdropSrc] = useState<string | undefined>(undefined)
   // 'cover' = 充满（竖屏/方形适用）；'contain' = 保留完整画面（横屏适用）
   const [fitMode, setFitMode] = useState<'cover' | 'contain'>('cover')
 
@@ -68,7 +71,10 @@ export function AuctionDetail() {
       void video.play().catch(() => {})
     }
 
-    const onPlaying = () => setVideoLoading(false)
+    const onPlaying = () => {
+      setVideoLoading(false)
+      setBackdropSrc(video.currentSrc || video.src || FALLBACK_VIDEO)
+    }
     video.addEventListener('playing', onPlaying)
 
     const url = auction.stream_url?.trim() || ''
@@ -132,6 +138,14 @@ export function AuctionDetail() {
       )
       if (arr.some((b) => b.user_id === uid)) hasBidRef.current = true
     })
+    api.get<{ data: AuctionStats }>(`/auctions/${auctionId}/stats`).then((r) => {
+      const stats = r.data.data
+      setBidCount(stats.bid_count)
+      setParticipantCount(stats.participant_count)
+      setTopBids(stats.top_bids)
+      syncServerTime(stats.server_time)
+      if (stats.top_bids.some((b) => b.user_id === uid)) hasBidRef.current = true
+    })
     api.get<{ data: AuctionComment[] }>(`/auctions/${auctionId}/comments`).then((r) => {
       setComments(r.data.data)
     })
@@ -146,21 +160,18 @@ export function AuctionDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auctionId])
 
-  // 倒计时
+  // 倒计时：100ms 刷新，并用后端 server_time 校准本机时钟偏移。
   useEffect(() => {
     if (!auction?.ends_at || auction.status !== 'active') {
-      setSecLeft(0)
       return
     }
     const tick = () => {
-      const remain = Math.max(
-        0,
-        Math.floor((new Date(auction.ends_at!).getTime() - Date.now()) / 1000),
-      )
-      setSecLeft(remain)
+      const calibratedNow = Date.now() + serverOffsetRef.current
+      const remain = Math.max(0, new Date(auction.ends_at!).getTime() - calibratedNow)
+      setMsLeft(remain)
     }
     tick()
-    const t = setInterval(tick, 1000)
+    const t = setInterval(tick, 100)
     return () => clearInterval(t)
   }, [auction?.ends_at, auction?.status])
 
@@ -171,10 +182,12 @@ export function AuctionDetail() {
     return () => clearTimeout(t)
   }, [toast])
 
-  const handleMessage = (msg: WSMessage) => {
+  function handleMessage(msg: WSMessage) {
     if (msg.type === 'auction_started') {
+      syncServerTime(msg.server_time)
       setAuction((p) => (p ? { ...p, status: 'active', ends_at: msg.ends_at } : p))
     } else if (msg.type === 'new_bid') {
+      syncServerTime(msg.server_time)
       setAuction((p) =>
         p
           ? {
@@ -187,16 +200,24 @@ export function AuctionDetail() {
       )
       setTopBids(msg.top_bids.slice(0, 5))
       setBidCount((c) => c + 1)
+      setParticipantCount(msg.participant_count)
       setPriceFlashKey((k) => k + 1)
 
       if (msg.winner_id === uid) {
-        pushToast('win', '✨ 你正在领先')
+        pushToast('win', '🎉 领先！')
+        playCue('win')
       } else if (hasBidRef.current) {
-        pushToast('lose', '⚠️ 你被超越了')
+        pushToast('lose', '⚡ 被超越！')
+        playCue('lose')
+      }
+      if (msg.auto_extended) {
+        pushToast('info', `⏱ 竞拍延时 ${msg.auto_extend_seconds} 秒`)
       }
     } else if (msg.type === 'auction_finished') {
+      syncServerTime(msg.server_time)
       setFinished({ final_price: msg.final_price, winner_id: msg.winner_id })
       setAuction((p) => (p ? { ...p, status: 'finished' } : p))
+      playCue('finish')
     } else if (msg.type === 'new_comment') {
       setComments((prev) => [...prev.slice(-49), msg.comment])
     } else if (msg.type === 'auction_cancelled') {
@@ -205,9 +226,16 @@ export function AuctionDetail() {
     }
   }
 
-  const pushToast = (kind: NonNullable<Toast>['kind'], text: string) => {
+  function pushToast(kind: NonNullable<Toast>['kind'], text: string) {
     toastIdRef.current += 1
     setToast({ kind, text, id: toastIdRef.current })
+  }
+
+  function syncServerTime(serverTime?: string) {
+    if (!serverTime) return
+    const serverMs = new Date(serverTime).getTime()
+    if (!Number.isFinite(serverMs)) return
+    serverOffsetRef.current = serverMs - Date.now()
   }
 
   // 最小出价 = 当前价 + 1×加价幅度
@@ -216,36 +244,41 @@ export function AuctionDetail() {
     [auction?.current_price, auction?.price_step], // eslint-disable-line react-hooks/exhaustive-deps
   )
 
-  // 当前价 / 加价幅度变动 → 出价金额若过低（被超越或首次加载）自动重置为最小出价
-  useEffect(() => {
-    if (!auction) return
-    if (bidAmount < minBid) setBidAmount(minBid)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [minBid])
+  const effectiveBidAmount = auction && bidAmount >= minBid ? bidAmount : minBid
 
   // 是否命中某个快捷倍数（用于高亮）
   const matchedMultiplier = useMemo(() => {
     if (!auction) return 0
-    const delta = bidAmount - auction.current_price
+    const delta = effectiveBidAmount - auction.current_price
     if (delta <= 0) return 0
     const m = delta / auction.price_step
     if (Math.abs(m - Math.round(m)) > 0.001) return 0
     return Math.round(m)
-  }, [bidAmount, auction?.current_price, auction?.price_step]) // eslint-disable-line
+  }, [effectiveBidAmount, auction?.current_price, auction?.price_step]) // eslint-disable-line
 
-  // 假在线人数（确定性，基于 auctionId）
+  // 演示在线人数（确定性，基于 auctionId）；真实参与人数来自 /stats 和 WS。
   const viewers = useMemo(() => ((auctionId * 137) % 800) + 120 + bidCount * 3, [auctionId, bidCount])
 
   const handleBid = async () => {
     if (!auction) return
+    if (submitting) return
+    const now = Date.now()
+    if (now - lastBidAtRef.current < 700) {
+      pushToast('info', '操作太快，正在同步出价')
+      return
+    }
     if (!isLoggedIn()) {
       const from = encodeURIComponent(`/auction/${auctionId}`)
       navigate(`/login?from=${from}`)
       return
     }
+    lastBidAtRef.current = now
     setSubmitting(true)
     try {
-      await api.post(`/auctions/${auctionId}/bids`, { amount: bidAmount })
+      await api.post(`/auctions/${auctionId}/bids`, {
+        amount: effectiveBidAmount,
+        client_bid_id: makeClientBidID(),
+      })
       hasBidRef.current = true
     } catch (e: unknown) {
       const r = (e as { response?: { data?: { error?: string } } }).response
@@ -306,14 +339,13 @@ export function AuctionDetail() {
       {/* 背景层：仅在 contain 模式（横屏视频）时显示，避免单调黑边 */}
       {fitMode === 'contain' && (
         <video
-          ref={backdropRef}
           className="live-video-backdrop"
           autoPlay
           loop
           muted
           playsInline
           aria-hidden="true"
-          src={videoRef.current?.currentSrc || undefined}
+          src={backdropSrc}
         />
       )}
 
@@ -388,14 +420,14 @@ export function AuctionDetail() {
       </div>
 
       {/* 倒计时 */}
-      {auction.status === 'active' && secLeft > 0 && (
+      {auction.status === 'active' && msLeft > 0 && (
         <div
           className="absolute left-3 z-10"
           style={{ top: 'calc(var(--safe-top) + 52px)' }}
         >
-          <span className={`countdown-pill ${secLeft < 10 ? 'urgent' : ''}`}>
+          <span className={`countdown-pill ${msLeft < 10_000 ? 'urgent' : ''}`}>
             <span className="dot" />
-            <span>距结束 {fmtTime(secLeft)}</span>
+            <span>距结束 {fmtMs(msLeft)}</span>
           </span>
         </div>
       )}
@@ -474,6 +506,7 @@ export function AuctionDetail() {
               {auction.ceiling_price && (
                 <div className="text-[#FFD451]">封顶 ¥{auction.ceiling_price}</div>
               )}
+              <div>参与 {participantCount} 人</div>
             </div>
           </div>
         </div>
@@ -533,7 +566,7 @@ export function AuctionDetail() {
               {submitting
                 ? '出价中...'
                 : isLoggedIn()
-                ? `出价 ¥${bidAmount.toLocaleString()}`
+                ? `出价 ¥${effectiveBidAmount.toLocaleString()}`
                 : `登录出价`}
             </button>
           </div>
@@ -717,8 +750,46 @@ function FullScreenEnd({
   )
 }
 
-function fmtTime(secs: number): string {
-  const m = Math.floor(secs / 60)
-  const s = secs % 60
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+function fmtMs(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000)
+  const m = Math.floor(totalSeconds / 60)
+  const s = totalSeconds % 60
+  const tenth = Math.floor((ms % 1000) / 100)
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${tenth}`
+}
+
+function makeClientBidID(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID()
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function playCue(kind: 'win' | 'lose' | 'finish') {
+  const AudioCtx = window.AudioContext || window.webkitAudioContext
+  if (!AudioCtx) return
+  try {
+    const ctx = new AudioCtx()
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    const now = ctx.currentTime
+    osc.type = 'sine'
+    osc.frequency.value = kind === 'win' ? 880 : kind === 'lose' ? 220 : 520
+    gain.gain.setValueAtTime(0.0001, now)
+    gain.gain.exponentialRampToValueAtTime(0.08, now + 0.02)
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18)
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.start(now)
+    osc.stop(now + 0.2)
+    window.setTimeout(() => void ctx.close(), 250)
+  } catch {
+    /* Browser may block audio until a user gesture. */
+  }
+}
+
+declare global {
+  interface Window {
+    webkitAudioContext?: typeof AudioContext
+  }
 }

@@ -12,6 +12,9 @@ import (
 
 	"auction-system/backend/config"
 	"auction-system/backend/models"
+	"auction-system/backend/ws"
+
+	"github.com/gorilla/websocket"
 )
 
 func TestMerchantCanUpdatePendingAuctionRules(t *testing.T) {
@@ -28,7 +31,7 @@ func TestMerchantCanUpdatePendingAuctionRules(t *testing.T) {
 		t.Fatalf("prepare auction: %v", err)
 	}
 
-	body := `{"title":"Updated","description":"new","image_url":"https://example.com/a.jpg","start_price_cents":12000,"price_step_cents":1000,"duration_seconds":600,"auto_extend_seconds":45}`
+	body := `{"title":"Updated","description":"new","image_url":"https://example.com/a.jpg","start_price_cents":12000,"price_step_cents":1000,"duration_seconds":600,"auto_extend_seconds":20}`
 	req := authReq(t, http.MethodPut, "/api/auctions/"+uintString(a.ID), body, seller)
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
@@ -42,7 +45,7 @@ func TestMerchantCanUpdatePendingAuctionRules(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if resp.Data.Title != "Updated" || resp.Data.StartPriceCents != 12000 || resp.Data.AutoExtendSeconds != 45 {
+	if resp.Data.Title != "Updated" || resp.Data.StartPriceCents != 12000 || resp.Data.AutoExtendSeconds != 20 {
 		t.Fatalf("unexpected auction update: %+v", resp.Data)
 	}
 }
@@ -160,7 +163,7 @@ func TestAutoExtendSecondsUsesAuctionRule(t *testing.T) {
 	a.SellerUserID = seller.ID
 	a.CurrentPriceCents = 10000
 	a.PriceStepCents = 500
-	a.AutoExtendSeconds = 45
+	a.AutoExtendSeconds = 20
 	a.EndsAt = &ends
 	if err := config.DB.Save(&a).Error; err != nil {
 		t.Fatalf("prepare auction: %v", err)
@@ -177,7 +180,61 @@ func TestAutoExtendSecondsUsesAuctionRule(t *testing.T) {
 	if err := config.DB.First(&fresh, a.ID).Error; err != nil {
 		t.Fatalf("load auction: %v", err)
 	}
-	if fresh.EndsAt == nil || time.Until(*fresh.EndsAt) < 40*time.Second {
+	if fresh.EndsAt == nil || time.Until(*fresh.EndsAt) < 15*time.Second {
 		t.Fatalf("auction was not extended by configured rule: %v", fresh.EndsAt)
+	}
+}
+
+func TestNewBidBroadcastIncludesRealtimeMetadata(t *testing.T) {
+	r := setupCommentTest(t)
+	seller := createNamedUser(t, "seller-realtime")
+	bidder := createNamedUser(t, "bidder-realtime")
+	createActiveMerchant(t, seller)
+	a := createCommentTestAuction(t)
+	ends := time.Now().Add(5 * time.Second)
+	a.SellerUserID = seller.ID
+	a.CurrentPriceCents = 0
+	a.CurrentPrice = 0
+	a.PriceStepCents = 100
+	a.PriceStep = 1
+	a.AutoExtendSeconds = 20
+	a.EndsAt = &ends
+	if err := config.DB.Save(&a).Error; err != nil {
+		t.Fatalf("prepare auction: %v", err)
+	}
+
+	client := &ws.Client{
+		AuctionID: a.ID,
+		Conn:      &websocket.Conn{},
+		Send:      make(chan []byte, 1),
+	}
+	ws.H.Register(client)
+	t.Cleanup(func() {
+		ws.H.Unregister(client)
+	})
+
+	req := authReq(t, http.MethodPost, "/api/auctions/"+uintString(a.ID)+"/bids", `{"amount_cents":100,"client_bid_id":"realtime-1"}`, bidder)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	select {
+	case raw := <-client.Send:
+		var event struct {
+			Type             string `json:"type"`
+			ParticipantCount int64  `json:"participant_count"`
+			AutoExtended     bool   `json:"auto_extended"`
+			ServerTime       string `json:"server_time"`
+		}
+		if err := json.Unmarshal(raw, &event); err != nil {
+			t.Fatalf("decode broadcast: %v", err)
+		}
+		if event.Type != "new_bid" || event.ParticipantCount != 1 || !event.AutoExtended || event.ServerTime == "" {
+			t.Fatalf("unexpected realtime metadata: %+v", event)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for new_bid broadcast")
 	}
 }

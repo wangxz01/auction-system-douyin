@@ -2,6 +2,7 @@ package config
 
 import (
 	"log"
+	"strconv"
 	"time"
 
 	"auction-system/backend/models"
@@ -42,6 +43,11 @@ func sweepExpired() {
 		if res.RowsAffected == 0 {
 			continue
 		}
+		CacheDel(
+			"auctions:list",
+			"auction:detail:"+strconv.FormatUint(uint64(a.ID), 10),
+			"auction:stats:"+strconv.FormatUint(uint64(a.ID), 10),
+		)
 
 		// 重新查最新数据用于广播（CurrentPrice 可能在快照后被更新）
 		var fresh models.Auction

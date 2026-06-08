@@ -25,8 +25,13 @@ type createAuctionReq struct {
 	CeilingPrice      *float64 `json:"ceiling_price"`
 	CeilingPriceCents *int64   `json:"ceiling_price_cents"`
 	DurationSeconds   int      `json:"duration_seconds"`
-	AutoExtendSeconds int      `json:"auto_extend_seconds"`
+	AutoExtendSeconds *int     `json:"auto_extend_seconds"`
 }
+
+const (
+	minAutoExtendSeconds = 10
+	maxAutoExtendSeconds = 30
+)
 
 func CreateAuction(c *gin.Context) {
 	sellerID, ok := canCreateAuction(c)
@@ -68,8 +73,8 @@ func CreateAuction(c *gin.Context) {
 	}
 	ceilingPriceCents := optionalCentsOrLegacy(req.CeilingPriceCents, req.CeilingPrice)
 
-	if startPriceCents <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "start_price 必须大于 0"})
+	if startPriceCents < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "start_price 不能小于 0"})
 		return
 	}
 	if priceStepCents <= 0 {
@@ -80,17 +85,13 @@ func CreateAuction(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "duration_seconds 必须大于 0"})
 		return
 	}
-	if req.AutoExtendSeconds < 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "auto_extend_seconds 不能小于 0"})
+	autoExtendSeconds, ok := resolveAutoExtendSeconds(c, req.AutoExtendSeconds)
+	if !ok {
 		return
 	}
 	if ceilingPriceCents != nil && *ceilingPriceCents <= startPriceCents {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ceiling_price 必须大于 start_price"})
 		return
-	}
-	autoExtendSeconds := req.AutoExtendSeconds
-	if autoExtendSeconds == 0 {
-		autoExtendSeconds = int(autoExtendThreshold / time.Second)
 	}
 
 	a := models.Auction{
@@ -115,6 +116,7 @@ func CreateAuction(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	invalidateAuctionCache(a.ID)
 	c.JSON(http.StatusOK, gin.H{"data": a})
 }
 
@@ -166,8 +168,8 @@ func UpdateAuction(c *gin.Context) {
 		priceStepCents = *req.PriceStepCents
 	}
 	ceilingPriceCents := optionalCentsOrLegacy(req.CeilingPriceCents, req.CeilingPrice)
-	if startPriceCents <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "start_price 必须大于 0"})
+	if startPriceCents < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "start_price 不能小于 0"})
 		return
 	}
 	if priceStepCents <= 0 {
@@ -178,17 +180,13 @@ func UpdateAuction(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "duration_seconds 必须大于 0"})
 		return
 	}
-	if req.AutoExtendSeconds < 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "auto_extend_seconds 不能小于 0"})
+	autoExtendSeconds, ok := resolveAutoExtendSeconds(c, req.AutoExtendSeconds)
+	if !ok {
 		return
 	}
 	if ceilingPriceCents != nil && *ceilingPriceCents <= startPriceCents {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ceiling_price 必须大于 start_price"})
 		return
-	}
-	autoExtendSeconds := req.AutoExtendSeconds
-	if autoExtendSeconds == 0 {
-		autoExtendSeconds = int(autoExtendThreshold / time.Second)
 	}
 
 	a.Title = req.Title
@@ -210,15 +208,21 @@ func UpdateAuction(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	invalidateAuctionCache(a.ID)
 	c.JSON(http.StatusOK, gin.H{"data": a})
 }
 
 func GetAuctions(c *gin.Context) {
 	var auctions []models.Auction
+	if config.CacheGetJSON("auctions:list", &auctions) {
+		c.JSON(http.StatusOK, gin.H{"data": auctions})
+		return
+	}
 	if err := config.DB.Order("created_at DESC").Find(&auctions).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	config.CacheSetJSON("auctions:list", auctions, 2*time.Second)
 	c.JSON(http.StatusOK, gin.H{"data": auctions})
 }
 
@@ -229,11 +233,44 @@ func GetAuction(c *gin.Context) {
 		return
 	}
 	var a models.Auction
+	if config.CacheGetJSON(auctionDetailCacheKey(id), &a) {
+		c.JSON(http.StatusOK, gin.H{"data": a})
+		return
+	}
 	if err := config.DB.First(&a, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "竞拍不存在"})
 		return
 	}
+	config.CacheSetJSON(auctionDetailCacheKey(id), a, 2*time.Second)
 	c.JSON(http.StatusOK, gin.H{"data": a})
+}
+
+func GetAuctionStats(c *gin.Context) {
+	id, err := parseID(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id 不合法"})
+		return
+	}
+	var a models.Auction
+	if err := config.DB.First(&a, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "竞拍不存在"})
+		return
+	}
+	cacheKey := auctionStatsCacheKey(id)
+	var cached gin.H
+	if config.CacheGetJSON(cacheKey, &cached) {
+		cached["server_time"] = time.Now().UTC().Format(time.RFC3339Nano)
+		c.JSON(http.StatusOK, gin.H{"data": cached})
+		return
+	}
+	stats := gin.H{
+		"bid_count":         countBids(a.ID),
+		"participant_count": countParticipants(a.ID),
+		"top_bids":          fetchTopBids(a.ID, 5),
+		"server_time":       time.Now().UTC().Format(time.RFC3339Nano),
+	}
+	config.CacheSetJSON(cacheKey, stats, time.Second)
+	c.JSON(http.StatusOK, gin.H{"data": stats})
 }
 
 func StartAuction(c *gin.Context) {
@@ -263,10 +300,12 @@ func StartAuction(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	invalidateAuctionCache(a.ID)
 	ws.H.Broadcast(a.ID, gin.H{
-		"type":       "auction_started",
-		"auction_id": a.ID,
-		"ends_at":    a.EndsAt,
+		"type":        "auction_started",
+		"auction_id":  a.ID,
+		"ends_at":     a.EndsAt,
+		"server_time": time.Now().UTC().Format(time.RFC3339Nano),
 	})
 	c.JSON(http.StatusOK, gin.H{"data": a})
 }
@@ -294,9 +333,11 @@ func CancelAuction(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	invalidateAuctionCache(a.ID)
 	ws.H.Broadcast(a.ID, gin.H{
-		"type":       "auction_cancelled",
-		"auction_id": a.ID,
+		"type":        "auction_cancelled",
+		"auction_id":  a.ID,
+		"server_time": time.Now().UTC().Format(time.RFC3339Nano),
 	})
 	c.JSON(http.StatusOK, gin.H{"data": a})
 }
@@ -315,4 +356,27 @@ func parseID(s string) (uint, error) {
 		return 0, err
 	}
 	return uint(n), nil
+}
+
+func auctionDetailCacheKey(id uint) string {
+	return "auction:detail:" + strconv.FormatUint(uint64(id), 10)
+}
+
+func auctionStatsCacheKey(id uint) string {
+	return "auction:stats:" + strconv.FormatUint(uint64(id), 10)
+}
+
+func invalidateAuctionCache(id uint) {
+	config.CacheDel("auctions:list", auctionDetailCacheKey(id), auctionStatsCacheKey(id))
+}
+
+func resolveAutoExtendSeconds(c *gin.Context, raw *int) (int, bool) {
+	if raw == nil {
+		return int(autoExtendThreshold / time.Second), true
+	}
+	if *raw < minAutoExtendSeconds || *raw > maxAutoExtendSeconds {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "auto_extend_seconds 必须在 10 到 30 秒之间"})
+		return 0, false
+	}
+	return *raw, true
 }

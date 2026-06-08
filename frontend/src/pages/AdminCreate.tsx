@@ -175,6 +175,9 @@ export function AdminCreate() {
             required
             suffix="秒"
             placeholder="默认 30"
+            min={10}
+            max={30}
+            step="1"
           />
         </div>
 
@@ -213,6 +216,9 @@ function RowInput({
   required,
   placeholder,
   suffix,
+  min,
+  max,
+  step,
 }: {
   label: string
   value: string
@@ -221,6 +227,9 @@ function RowInput({
   required?: boolean
   placeholder?: string
   suffix?: string
+  min?: number
+  max?: number
+  step?: string
 }) {
   return (
     <label className="ios-list-item">
@@ -235,7 +244,9 @@ function RowInput({
           onChange={(e) => onChange(e.target.value)}
           required={required}
           placeholder={placeholder}
-          step={type === 'number' ? '0.01' : undefined}
+          min={min}
+          max={max}
+          step={step ?? (type === 'number' ? '0.01' : undefined)}
           className="flex-1 bg-transparent outline-none text-right text-[15px] placeholder:text-[#C7C7CC]"
         />
         {suffix && <span className="text-[#8E8E93] text-[13px]">{suffix}</span>}

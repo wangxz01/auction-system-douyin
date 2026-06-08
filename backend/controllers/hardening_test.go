@@ -121,6 +121,38 @@ func TestOnlyMerchantCanCreateAuctionWithCents(t *testing.T) {
 	}
 }
 
+func TestMerchantCanCreateZeroStartAuctionWithValidAutoExtend(t *testing.T) {
+	r := setupCommentTest(t)
+	seller := createNamedUser(t, "seller-zero-start")
+	createActiveMerchant(t, seller)
+
+	body := `{"title":"Zero Start","start_price_cents":0,"price_step_cents":100,"duration_seconds":120,"auto_extend_seconds":20}`
+	req := authReq(t, http.MethodPost, "/api/auctions", body, seller)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("zero start status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Data models.Auction `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	t.Cleanup(func() { config.DB.Delete(&models.Auction{}, resp.Data.ID) })
+	if resp.Data.StartPriceCents != 0 || resp.Data.CurrentPriceCents != 0 || resp.Data.AutoExtendSeconds != 20 {
+		t.Fatalf("unexpected zero start auction: %+v", resp.Data)
+	}
+
+	req = authReq(t, http.MethodPost, "/api/auctions", `{"title":"Bad Extend","start_price_cents":0,"price_step_cents":100,"duration_seconds":120,"auto_extend_seconds":9}`, seller)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("invalid auto extend status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestOrderRequiresOwnerSellerOrAdmin(t *testing.T) {
 	t.Setenv("ADMIN_USERNAMES", "order-admin")
 	r := setupCommentTest(t)
@@ -219,6 +251,75 @@ func TestConcurrentBidsCannotOverwriteHigherBid(t *testing.T) {
 	}
 }
 
+func TestDuplicateClientBidIDCreatesOnlyOneBid(t *testing.T) {
+	r := setupCommentTest(t)
+	bidder := createNamedUser(t, "bidder-idempotent")
+	a := createCommentTestAuction(t)
+	ends := time.Now().Add(time.Minute)
+	a.CurrentPrice = 0
+	a.StartPrice = 0
+	a.StartPriceCents = 0
+	a.CurrentPriceCents = 0
+	a.PriceStep = 1
+	a.PriceStepCents = 100
+	a.Status = "active"
+	a.EndsAt = &ends
+	if err := config.DB.Save(&a).Error; err != nil {
+		t.Fatalf("prepare auction: %v", err)
+	}
+
+	body := `{"amount_cents":100,"client_bid_id":"same-click-1"}`
+	for i := 0; i < 2; i++ {
+		req := authReq(t, http.MethodPost, "/api/auctions/"+uintString(a.ID)+"/bids", body, bidder)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("attempt %d status = %d, body = %s", i+1, rec.Code, rec.Body.String())
+		}
+	}
+
+	var count int64
+	if err := config.DB.Model(&models.Bid{}).
+		Where("auction_id = ? AND user_id = ?", a.ID, bidder.ID).
+		Count(&count).Error; err != nil {
+		t.Fatalf("count bids: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("duplicate idempotency key created %d bids", count)
+	}
+}
+
+func TestDuplicateClientBidIDAfterCeilingIsStillIdempotent(t *testing.T) {
+	r := setupCommentTest(t)
+	bidder := createNamedUser(t, "bidder-idempotent-ceiling")
+	a := createCommentTestAuction(t)
+	ends := time.Now().Add(time.Minute)
+	a.CurrentPrice = 0
+	a.StartPrice = 0
+	a.StartPriceCents = 0
+	a.CurrentPriceCents = 0
+	a.PriceStep = 1
+	a.PriceStepCents = 100
+	ceiling := int64(100)
+	a.CeilingPrice = floatPtr(1)
+	a.CeilingPriceCents = &ceiling
+	a.Status = "active"
+	a.EndsAt = &ends
+	if err := config.DB.Save(&a).Error; err != nil {
+		t.Fatalf("prepare auction: %v", err)
+	}
+
+	body := `{"amount_cents":100,"client_bid_id":"same-ceiling-click"}`
+	for i := 0; i < 2; i++ {
+		req := authReq(t, http.MethodPost, "/api/auctions/"+uintString(a.ID)+"/bids", body, bidder)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("attempt %d status = %d, body = %s", i+1, rec.Code, rec.Body.String())
+		}
+	}
+}
+
 func TestReleaseSecurityValidationRequiresSecretAndOrigins(t *testing.T) {
 	cfg := &config.Config{ServerMode: gin.ReleaseMode, JWTSecret: "", AllowedOrigins: nil}
 	if err := config.ValidateSecurity(cfg); err == nil {
@@ -229,4 +330,8 @@ func TestReleaseSecurityValidationRequiresSecretAndOrigins(t *testing.T) {
 	if err := config.ValidateSecurity(cfg); err != nil {
 		t.Fatalf("expected valid release security config: %v", err)
 	}
+}
+
+func floatPtr(v float64) *float64 {
+	return &v
 }

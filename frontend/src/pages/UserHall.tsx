@@ -107,6 +107,10 @@ export function UserHall() {
                 <div>
                   <p className="text-[11px] text-[#8E8E93]">当前价</p>
                   <p className="text-xl font-bold text-[#FF9500]">¥{a.current_price}</p>
+                  <p className="text-[11px] text-[#8E8E93] mt-1 truncate">
+                    起拍 ¥{a.start_price} · +¥{a.price_step}
+                    {a.ceiling_price ? ` · 封顶 ¥${a.ceiling_price}` : ''}
+                  </p>
                 </div>
               </div>
             </div>

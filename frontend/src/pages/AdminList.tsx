@@ -11,7 +11,6 @@ export function AdminList() {
   const [error, setError] = useState<string | null>(null)
 
   const load = () => {
-    setLoading(true)
     api
       .get<{ data: Auction[] }>('/auctions')
       .then((r) => {
@@ -22,7 +21,9 @@ export function AdminList() {
       .finally(() => setLoading(false))
   }
 
-  useEffect(load, [])
+  useEffect(() => {
+    load()
+  }, [])
 
   const handleStart = async (e: React.MouseEvent, id: number) => {
     e.preventDefault()

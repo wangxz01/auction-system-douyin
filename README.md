@@ -102,6 +102,23 @@
 | 订单管理页 | ✅ | `/admin/orders` 查看商家的成交订单 |
 | 后端测试 | ✅ | 覆盖编辑规则、订单列表、上传图片和自定义延时 |
 
+### ✅ 第九阶段：用户端竞价体验与高并发补强（已完成）
+
+目标：围绕“复杂规则零漏洞”和“毫秒级实时同步”补齐验收重点，用户端保持简单可用但链路完整。
+
+| 模块 | 状态 | 说明 |
+|---|---|---|
+| 0 元起拍 | ✅ | `start_price_cents` 允许为 0，首次有效出价仍需满足固定加价幅度 |
+| 自动延时范围 | ✅ | `auto_extend_seconds` 限制为 10-30 秒，缺省 30 秒 |
+| 出价幂等 | ✅ | `client_bid_id` + 数据库唯一索引，同一用户同一竞拍同一点击只落库一次 |
+| Redis 出价锁 | ✅ | Redis 可用时对单场竞拍加短 TTL 分布式锁；Redis 不可用时降级到数据库行锁 |
+| Redis 读缓存 | ✅ | 竞拍列表/详情/统计使用短 TTL 缓存，写路径统一失效 |
+| 实时同步字段 | ✅ | `new_bid` 广播参与人数、是否延时、服务器时间、Top 排行 |
+| 毫秒倒计时 | ✅ | 前端 100ms 刷新，并根据后端 `server_time` 做时钟偏移校准 |
+| 竞价氛围 | ✅ | 领先/被超越/延时/结束 toast，价格动画，提示音，实时排行榜 |
+| 用户历史 | ✅ | `/me/bids` 浏览参与过的竞拍，`/me/orders` 浏览成交订单 |
+| 后端测试 | ✅ | 覆盖 0 元起拍、延时范围、幂等出价、实时广播元数据 |
+
 ### ✅ 第五阶段：用户系统（已完成）
 
 目标：真实注册/登录、JWT 鉴权、敏感接口保护、前端身份持久化。
@@ -185,17 +202,19 @@
 
 ```jsonc
 // 竞拍开始
-{"type":"auction_started","auction_id":1,"ends_at":"..."}
+{"type":"auction_started","auction_id":1,"ends_at":"...","server_time":"..."}
 
 // 新出价（每次出价后广播）
 {"type":"new_bid","auction_id":1,"current_price":130,"winner_id":2,
- "ends_at":"...","top_bids":[{"user_id":2,"amount":130},...]}
+ "ends_at":"...","participant_count":23,"auto_extended":true,
+ "auto_extend_seconds":20,"server_time":"...",
+ "top_bids":[{"user_id":2,"amount":130},...]}
 
 // 竞拍结束（封顶价命中 或 定时器到期触发）
-{"type":"auction_finished","auction_id":1,"final_price":150,"winner_id":3}
+{"type":"auction_finished","auction_id":1,"final_price":150,"winner_id":3,"server_time":"..."}
 
 // 竞拍取消
-{"type":"auction_cancelled","auction_id":1}
+{"type":"auction_cancelled","auction_id":1,"server_time":"..."}
 ```
 
 **前端连接方式**
@@ -237,6 +256,7 @@ POST   /api/auth/login
 GET    /api/auctions
 GET    /api/auctions/:id
 GET    /api/auctions/:id/bids
+GET    /api/auctions/:id/stats
 GET    /api/auctions/:id/comments
 GET    /ws/auctions/:id
 
@@ -262,9 +282,13 @@ POST   /api/admin/uploads/images
 
 - 所有成功响应 `{"data": ...}`，失败响应 `{"error": "原因"}`
 - 出价校验顺序：状态 → 是否过期 → 加价幅度 → 封顶价
+- 0 元起拍：`start_price_cents` 可为 0；首次出价必须高于当前价并满足加价幅度
 - 加价规则：`amount_cents = current_price_cents + n × price_step_cents` (n ≥ 1)
-- 自动延时：距 `ends_at` 不足 `auto_extend_seconds` 出价 → ends_at 延后到对应秒数（默认 30s）
+- 自动延时：`auto_extend_seconds` 只允许 10-30 秒；距 `ends_at` 不足该秒数时出价会延后结束时间
 - 封顶价命中：立即 finished + 生成订单
+- 出价幂等：前端每次点击生成 `client_bid_id`；后端通过唯一索引避免同一点击重复落库
+- 并发控制：Redis 可用时先抢单场竞拍短 TTL 出价锁，再进入 MySQL 事务 + `SELECT ... FOR UPDATE`
+- 读写分离：列表/详情/统计走 Redis 短 TTL 读缓存，创建/编辑/开始/取消/出价后清理缓存，写入仍以 MySQL 为准
 - 定时器幂等：用条件更新避免与封顶价路径重复生成订单
 - 订单表 `auction_id` 加唯一索引，双保险
 
@@ -380,6 +404,7 @@ auction-system/
 | `user_id` | bigint unsigned | IDX | 出价人 |
 | `amount_cents` | bigint | — | 出价金额（分） |
 | `amount` | decimal(12,2) | — | 兼容旧前端的元字段 |
+| `client_bid_id` | varchar(64) | UNIQUE(`auction_id`,`user_id`,`client_bid_id`) | 前端点击级幂等键，可空 |
 | `created_at` | datetime(3) | — | 出价时间 |
 
 ### `orders`（订单表）
@@ -563,10 +588,51 @@ VITE_API_BASE=http://localhost:8080
 | `gorm.io/gorm` + `gorm.io/driver/mysql` | ORM，把 Go 结构体映射成数据表 |
 | `github.com/gorilla/websocket` | WebSocket（实时出价用） |
 | `github.com/joho/godotenv` | 读取 `.env` 文件 |
+| `github.com/redis/go-redis/v9` | Redis 读缓存、出价短 TTL 分布式锁 |
 
 ### 前端依赖
 
 由 `npm create vite@latest --template react-ts` 自动安装：React 19、React-DOM、TypeScript、Vite。
+
+### 高并发与实时同步方案
+
+| 考察点 | 当前实现 |
+|---|---|
+| 出价一致性 | MySQL 事务内 `SELECT ... FOR UPDATE` 锁定竞拍行，更新当前价、赢家、订单生成在同一事务完成 |
+| 出价幂等 | 前端每次点击带 `client_bid_id`，后端 `bids` 表用 `(auction_id,user_id,client_bid_id)` 唯一索引兜底 |
+| 分布式锁 | Redis 可用时使用 `SET NX EX` 获取 `auction:bid-lock:{id}`，Lua 校验 value 后释放 |
+| 读写分离 | 读路径优先 Redis 短 TTL 缓存；写路径只写 MySQL 并失效缓存 |
+| 防缓存击穿 | 高频读接口 TTL 很短（统计 1s，列表/详情 2s），实时状态主要靠 WebSocket 推送 |
+| 房间隔离 | WebSocket Hub 按 `auction_id` 分房间，只向对应直播间广播 |
+| 断连重连 | 前端 `AuctionWS` 自动重连 5 次，每次间隔 3s；后端 read/write pump 心跳保活 |
+| 毫秒倒计时 | `new_bid` / `auction_started` 带 `server_time`，前端按服务器时间校准后 100ms 刷新 |
+| 防抖节流 | 前端出价按钮有提交态 + 700ms 点击间隔保护，后端仍以幂等键和事务为准 |
+| 可观测性 | 当前有健康检查、关键路径日志和测试覆盖；生产级异常告警/指标面板仍属于后续部署阶段 |
+
+### 用户端功能验收
+
+| 功能 | 状态 | 说明 |
+|---|---|---|
+| 直播间 | ✅ | 支持 HLS 地址；加载失败时使用 `public/live.mp4` 固定演示视频 |
+| 竞拍浏览 | ✅ | 大厅展示商品列表、状态、当前价、起拍价、加价幅度、封顶价 |
+| 详情规则 | ✅ | 详情页展示当前价、封顶价、出价次数、真实参与人数、实时排行 |
+| 出价参与 | ✅ | 登录后手动出价，支持快捷倍数和自定义金额 |
+| 关键提醒 | ✅ | 领先、被超越、自动延时、竞拍结束通过 toast / 音效 / 动画反馈 |
+| 实时排行 | ✅ | 初始走 `/stats`，后续通过 `new_bid` 同步 Top5 |
+| 结果查看 | ✅ | 中标用户可查看订单并模拟支付 |
+| 历史记录 | ✅ | `/me/bids` 查看参与历史，`/me/orders` 查看订单历史 |
+
+### AI 工具使用沉淀
+
+本项目把 AI 定位为“执行与审查辅助”，而不是替代关键决策：
+
+1. 先由人确定业务边界：用户端、商家端、规则优先级、上线前安全要求。
+2. AI 负责快速扫代码、列风险、补测试、生成样板实现和 README 记录。
+3. 关键规则由测试约束：出价并发、0 元起拍、自动延时、幂等、防越权都先落到后端测试。
+4. 人工把控关键决策：金额改为分字段、管理员策略、Redis 只作为加速/锁增强而不是唯一一致性来源。
+5. AI 代码贡献率不追求越高越好：核心交易链路必须可解释、可测试、可回滚；生成代码需要经过 `go test`、前端构建和人工 diff 审查。
+
+合理贡献率评估：AI 适合承担重复代码、接口串联、测试样例、文档整理；拍卖状态机、权限边界、资金/订单一致性等核心决策应由人工确认后再让 AI 执行。
 
 ---
 
@@ -588,6 +654,7 @@ A: 后端 `.env` 改完要重启 `go run`；前端 `.env` 改完要重启 `npm r
 
 ## 📅 更新记录
 
+- **2026-06-09** — 补齐用户端竞价体验与高并发重点：0 元起拍、10-30 秒延时、出价幂等、Redis 锁/缓存、毫秒倒计时、实时参与人数和 AI 使用说明
 - **2026-06-08** — 补齐商家后台基础工作流：图片上传、未开始竞拍编辑、自定义延时、订单管理页
 - **2026-06-08** — 完成第七阶段：后端核心加固，出价事务锁、商家权限、订单保护、金额分字段、生产安全配置和测试覆盖
 - **2026-06-08** — 完成直播评论持久化：comments 表、历史评论接口、POST 评论接口、WebSocket `new_comment`

@@ -60,6 +60,13 @@ export interface TopBid {
   amount_cents: number
 }
 
+export interface AuctionStats {
+  bid_count: number
+  participant_count: number
+  top_bids: TopBid[]
+  server_time: string
+}
+
 export interface MyBidEntry {
   auction: Auction
   my_highest_bid: number
@@ -78,7 +85,7 @@ export interface AdminOrderEntry {
 }
 
 export type WSMessage =
-  | { type: 'auction_started'; auction_id: number; ends_at: string }
+  | { type: 'auction_started'; auction_id: number; ends_at: string; server_time?: string }
   | {
       type: 'new_bid'
       auction_id: number
@@ -87,6 +94,10 @@ export type WSMessage =
       winner_id: number
       ends_at: string
       top_bids: TopBid[]
+      participant_count: number
+      auto_extended: boolean
+      auto_extend_seconds: number
+      server_time: string
     }
   | {
       type: 'auction_finished'
@@ -94,10 +105,11 @@ export type WSMessage =
       final_price: number
       final_price_cents: number
       winner_id: number | null
+      server_time?: string
     }
   | {
       type: 'new_comment'
       auction_id: number
       comment: AuctionComment
     }
-  | { type: 'auction_cancelled'; auction_id: number }
+  | { type: 'auction_cancelled'; auction_id: number; server_time?: string }

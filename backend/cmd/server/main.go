@@ -18,6 +18,7 @@ func main() {
 	config.SetActive(cfg)
 
 	config.InitDB(cfg)
+	config.InitRedis(cfg)
 	ws.InitHub()
 	config.StartScheduler()
 

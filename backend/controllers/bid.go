@@ -1,8 +1,11 @@
 package controllers
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"auction-system/backend/config"
@@ -24,6 +27,7 @@ type topBidView struct {
 type placeBidReq struct {
 	Amount      *float64 `json:"amount"`
 	AmountCents *int64   `json:"amount_cents"`
+	ClientBidID string   `json:"client_bid_id"`
 }
 
 const (
@@ -46,9 +50,28 @@ func PlaceBid(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
 		return
 	}
+	clientBidID := strings.TrimSpace(req.ClientBidID)
+	if clientBidID == "" {
+		clientBidID = strings.TrimSpace(c.GetHeader("Idempotency-Key"))
+	}
+	if len(clientBidID) > 64 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "client_bid_id 不能超过 64 个字符"})
+		return
+	}
+
+	lockValue := fmt.Sprintf("%d:%s:%d", uid, clientBidID, time.Now().UnixNano())
+	releaseLock, locked := config.WithAuctionBidLock(context.Background(), id, lockValue, 3*time.Second)
+	if !locked {
+		c.JSON(http.StatusConflict, gin.H{"error": "出价处理中，请稍后重试"})
+		return
+	}
+	defer releaseLock()
 
 	var a models.Auction
 	var hitCeiling bool
+	var autoExtended bool
+	var duplicateBid bool
+	var participantCount int64
 	var response gin.H
 	var status = http.StatusOK
 	handled := errors.New("handled")
@@ -60,6 +83,29 @@ func PlaceBid(c *gin.Context) {
 			return handled
 		}
 
+		if clientBidID != "" {
+			var existing models.Bid
+			err := tx.Where("auction_id = ? AND user_id = ? AND client_bid_id = ?", a.ID, uid, clientBidID).
+				First(&existing).Error
+			if err == nil {
+				duplicateBid = true
+				participantCount = countParticipantsTx(tx, a.ID)
+				response = gin.H{"data": gin.H{
+					"message":             "重复出价已忽略",
+					"duplicate":           true,
+					"current_price":       a.CurrentPrice,
+					"current_price_cents": a.CurrentPriceCents,
+					"ends_at":             a.EndsAt,
+					"finished":            a.Status == "finished",
+					"participant_count":   participantCount,
+					"server_time":         time.Now().UTC().Format(time.RFC3339Nano),
+				}}
+				return nil
+			}
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+		}
 		if a.Status != "active" {
 			status = http.StatusBadRequest
 			response = gin.H{"error": "竞拍当前不可出价: " + a.Status}
@@ -104,11 +150,16 @@ func PlaceBid(c *gin.Context) {
 			return handled
 		}
 
+		var storedClientBidID *string
+		if clientBidID != "" {
+			storedClientBidID = &clientBidID
+		}
 		bid := models.Bid{
 			AuctionID:   a.ID,
 			UserID:      uid,
 			Amount:      centsToFloat(amountCents),
 			AmountCents: amountCents,
+			ClientBidID: storedClientBidID,
 		}
 		if err := tx.Create(&bid).Error; err != nil {
 			return err
@@ -130,6 +181,7 @@ func PlaceBid(c *gin.Context) {
 		if a.EndsAt != nil && a.EndsAt.Sub(now) < extendDuration {
 			newEnds := now.Add(extendDuration)
 			a.EndsAt = &newEnds
+			autoExtended = true
 		}
 
 		hitCeiling = ceilingCents != nil && amountCents == *ceilingCents
@@ -145,6 +197,7 @@ func PlaceBid(c *gin.Context) {
 				return err
 			}
 		}
+		participantCount = countParticipantsTx(tx, a.ID)
 
 		response = gin.H{"data": gin.H{
 			"message":             "出价成功",
@@ -152,6 +205,9 @@ func PlaceBid(c *gin.Context) {
 			"current_price_cents": a.CurrentPriceCents,
 			"ends_at":             a.EndsAt,
 			"finished":            hitCeiling,
+			"auto_extended":       autoExtended,
+			"participant_count":   participantCount,
+			"server_time":         time.Now().UTC().Format(time.RFC3339Nano),
 		}}
 		return nil
 	})
@@ -164,15 +220,22 @@ func PlaceBid(c *gin.Context) {
 		return
 	}
 
-	ws.H.Broadcast(a.ID, gin.H{
-		"type":                "new_bid",
-		"auction_id":          a.ID,
-		"current_price":       a.CurrentPrice,
-		"current_price_cents": a.CurrentPriceCents,
-		"winner_id":           a.WinnerID,
-		"ends_at":             a.EndsAt,
-		"top_bids":            fetchTopBids(a.ID, 5),
-	})
+	if !duplicateBid {
+		invalidateAuctionCache(a.ID)
+		ws.H.Broadcast(a.ID, gin.H{
+			"type":                "new_bid",
+			"auction_id":          a.ID,
+			"current_price":       a.CurrentPrice,
+			"current_price_cents": a.CurrentPriceCents,
+			"winner_id":           a.WinnerID,
+			"ends_at":             a.EndsAt,
+			"top_bids":            fetchTopBids(a.ID, 5),
+			"participant_count":   participantCount,
+			"auto_extended":       autoExtended,
+			"auto_extend_seconds": a.AutoExtendSeconds,
+			"server_time":         time.Now().UTC().Format(time.RFC3339Nano),
+		})
+	}
 
 	if hitCeiling {
 		ws.H.Broadcast(a.ID, gin.H{
@@ -181,6 +244,7 @@ func PlaceBid(c *gin.Context) {
 			"final_price":       a.CurrentPrice,
 			"final_price_cents": a.CurrentPriceCents,
 			"winner_id":         a.WinnerID,
+			"server_time":       time.Now().UTC().Format(time.RFC3339Nano),
 		})
 	}
 
@@ -203,6 +267,25 @@ func fetchTopBids(auctionID uint, limit int) []topBidView {
 		}
 	}
 	return out
+}
+
+func countBids(auctionID uint) int64 {
+	var count int64
+	config.DB.Model(&models.Bid{}).Where("auction_id = ?", auctionID).Count(&count)
+	return count
+}
+
+func countParticipants(auctionID uint) int64 {
+	return countParticipantsTx(config.DB, auctionID)
+}
+
+func countParticipantsTx(db *gorm.DB, auctionID uint) int64 {
+	var count int64
+	db.Model(&models.Bid{}).
+		Where("auction_id = ?", auctionID).
+		Distinct("user_id").
+		Count(&count)
+	return count
 }
 
 func GetBids(c *gin.Context) {

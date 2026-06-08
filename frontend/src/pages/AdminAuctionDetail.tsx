@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Auction, Bid, Order } from '../lib/types'
@@ -27,8 +27,7 @@ export function AdminAuctionDetail() {
     auto_extend_seconds: 30,
   })
 
-  const load = () => {
-    setLoading(true)
+  const load = useCallback(() => {
     Promise.all([
       api.get<{ data: Auction }>(`/auctions/${auctionId}`),
       api.get<{ data: Bid[] }>(`/auctions/${auctionId}/bids`),
@@ -57,9 +56,11 @@ export function AdminAuctionDetail() {
       })
       .catch((e) => setError(extractError(e)))
       .finally(() => setLoading(false))
-  }
+  }, [auctionId])
 
-  useEffect(load, [auctionId])
+  useEffect(() => {
+    load()
+  }, [load])
 
   const onStart = async () => {
     try {
@@ -172,7 +173,7 @@ export function AdminAuctionDetail() {
             <EditInput label="加价幅度" type="number" value={String(editForm.price_step)} onChange={(v) => updateEdit('price_step', v)} suffix="¥" />
             <EditInput label="封顶价" type="number" value={editForm.ceiling_price} onChange={(v) => updateEdit('ceiling_price', v)} suffix="¥" />
             <EditInput label="竞拍时长" type="number" value={String(editForm.duration_seconds)} onChange={(v) => updateEdit('duration_seconds', v)} suffix="秒" />
-            <EditInput label="延时机制" type="number" value={String(editForm.auto_extend_seconds)} onChange={(v) => updateEdit('auto_extend_seconds', v)} suffix="秒" />
+            <EditInput label="延时机制" type="number" value={String(editForm.auto_extend_seconds)} onChange={(v) => updateEdit('auto_extend_seconds', v)} suffix="秒" min={10} max={30} step="1" />
           </div>
           <div className="flex justify-end gap-3 mt-4">
             <button type="button" onClick={() => setEditing(false)} className="btn-default px-5 py-2 rounded-full text-sm">
@@ -322,12 +323,18 @@ function EditInput({
   onChange,
   type = 'text',
   suffix,
+  min,
+  max,
+  step,
 }: {
   label: string
   value: string
   onChange: (v: string) => void
   type?: string
   suffix?: string
+  min?: number
+  max?: number
+  step?: string
 }) {
   return (
     <label className="ios-list-item">
@@ -337,7 +344,9 @@ function EditInput({
           type={type}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          step={type === 'number' ? '0.01' : undefined}
+          min={min}
+          max={max}
+          step={step ?? (type === 'number' ? '0.01' : undefined)}
           className="flex-1 bg-transparent outline-none text-right text-[15px] placeholder:text-[#C7C7CC]"
         />
         {suffix && <span className="text-[#8E8E93] text-[13px]">{suffix}</span>}
