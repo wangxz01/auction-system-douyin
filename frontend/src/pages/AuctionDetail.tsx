@@ -58,6 +58,10 @@ export function AuctionDetail() {
   const [showCustomModal, setShowCustomModal] = useState(false)
   const [customInput, setCustomInput] = useState('')
 
+  // 评论输入
+  const [showCommentModal, setShowCommentModal] = useState(false)
+  const [commentInput, setCommentInput] = useState('')
+
   // 视频源加载策略：HLS → 原生 HLS → 兜底本地
   useEffect(() => {
     if (!auction) return
@@ -262,6 +266,18 @@ export function AuctionDetail() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const sendComment = () => {
+    const text = commentInput.trim()
+    if (!text) {
+      setShowCommentModal(false)
+      return
+    }
+    const name = me?.username ?? `游客${String(uid || Date.now()).slice(-4)}`
+    setComments((prev) => [...prev.slice(-4), `${name}: ${text}`])
+    setCommentInput('')
+    setShowCommentModal(false)
   }
 
   const confirmCustom = () => {
@@ -505,9 +521,14 @@ export function AuctionDetail() {
           {/* 分隔线 */}
           <div className="h-px bg-white/12 -mx-3" />
 
-          {/* 评论占位 + 出价 */}
+          {/* 评论 + 出价 */}
           <div className="flex items-center gap-3 pt-2">
-            <div className="flex-1 text-white/55 text-sm truncate">说点什么...</div>
+            <button
+              onClick={() => setShowCommentModal(true)}
+              className="flex-1 text-left text-white/55 text-sm truncate active:opacity-60 transition-opacity"
+            >
+              说点什么...
+            </button>
             <button
               onClick={handleBid}
               disabled={submitting}
@@ -528,6 +549,42 @@ export function AuctionDetail() {
           style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}
         >
           竞拍尚未开始，敬请期待
+        </div>
+      )}
+
+      {/* 评论 bottom sheet */}
+      {showCommentModal && (
+        <div
+          className="absolute inset-0 z-40 bg-black/55 flex items-end"
+          onClick={() => setShowCommentModal(false)}
+        >
+          <div
+            className="w-full px-3"
+            style={{ paddingBottom: 'calc(12px + env(safe-area-inset-bottom))', paddingTop: 12 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="live-glass flex items-center gap-2 px-3 py-2">
+              <input
+                type="text"
+                value={commentInput}
+                onChange={(e) => setCommentInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') sendComment()
+                  if (e.key === 'Escape') setShowCommentModal(false)
+                }}
+                placeholder="参与互动"
+                maxLength={50}
+                autoFocus
+                className="flex-1 bg-transparent text-white text-base outline-none placeholder:text-white/40"
+              />
+              <button
+                onClick={sendComment}
+                className="live-text-btn gold text-base"
+              >
+                发送
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
