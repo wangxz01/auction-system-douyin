@@ -227,6 +227,40 @@ body {
   background: rgba(180, 130, 60, 0.4);
 }
 
+/* === 底部 Tab 导航（用户端） === */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border-top: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 -2px 12px rgba(160, 120, 50, 0.06);
+  padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+}
+.bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #86868b;
+  padding: 6px 0;
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+.bottom-nav-item.is-active {
+  color: #FF9500;
+}
+.bottom-nav-item.is-active .text-xl {
+  transform: scale(1.1);
+}
+
 /* ============================================================
    📱 PhoneFrame：仅 md+ 显示 iPhone 边框
    移动端（<768px）所有 .phone-* 都没有样式，pass-through。

@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { UserHall } from './pages/UserHall'
 import { AuctionDetail } from './pages/AuctionDetail'
 import { OrderPage } from './pages/OrderPage'
+import { Me } from './pages/Me'
 import { AdminList } from './pages/AdminList'
 import { AdminCreate } from './pages/AdminCreate'
 import { Login } from './pages/Login'
@@ -17,6 +18,7 @@ export default function App() {
       <Routes>
         {/* 用户端：移动端设计，桌面端套手机壳 */}
         <Route path="/" element={inPhone(<UserHall />)} />
+        <Route path="/me" element={inPhone(<Me />)} />
         <Route path="/login" element={inPhone(<Login />)} />
         <Route path="/auction/:id" element={inPhone(<AuctionDetail />)} />
         <Route

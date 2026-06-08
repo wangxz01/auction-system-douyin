@@ -6,18 +6,28 @@
 
 ## 🚪 两端入口（默认 dev 地址）
 
-| 端 | 适配 | 路由 | 说明 |
-|---|---|---|---|
-| **用户端**（消费者 / H5） | 移动端，桌面访问会自动套 iPhone 边框 | <http://localhost:5173/> | 拍卖大厅 |
-| 用户端 - 详情 | 同上 | `/auction/:id` | 实时出价 + 倒计时 + 排行 |
-| 用户端 - 订单 | 同上 | `/auction/:id/order` | 中标后查看 + 模拟支付（需登录） |
-| 用户端 - 登录 | 同上 | `/login` | 登录 / 注册切换 |
-| **商家端**（管理后台 / PC） | 宽屏 PC | <http://localhost:5173/admin> | 竞拍列表 + 开始/取消（需登录） |
-| 商家端 - 发布 | 同上 | `/admin/create` | 创建新竞拍 |
+> **强隔离**：用户端和商家端没有任何互相跳转的入口，按业务边界各自独立。商家入口只能从用户端「我的」页面进入。
 
-> 用户端页面（`/`、`/login`、`/auction/:id`、`/auction/:id/order`）是按手机尺寸设计的。
-> 在桌面浏览器打开时，会自动套一个 iPhone 形状的边框（含灵动岛 + 状态栏），方便预览真机效果。
-> 浏览器窗口宽度 < 768px 时（真机或开发者工具切到移动模式），边框自动隐藏，恢复全屏布局。
+### 🛒 用户端（消费者 / 移动端 H5）
+
+| 路由 | 页面 | 说明 |
+|---|---|---|
+| <http://localhost:5173/> | 大厅 | 进行中 & 未开始的竞拍列表 |
+| `/auction/:id` | 详情 | 实时出价 + 倒计时 + 排行（WebSocket） |
+| `/auction/:id/order` | 订单 | 中标后查看 + 模拟支付（需登录） |
+| `/me` | 我的 | 用户信息 + 退出 + 商家后台入口 |
+| `/login` | 登录 | 登录 / 注册切换 |
+
+底部固定 Tab 栏：🏠 大厅 / 👤 我的（仅在大厅 + 我的页面显示，详情/订单页不显示）
+
+### 🛠️ 商家端（管理后台 / PC 宽屏）
+
+| 路由 | 页面 | 说明 |
+|---|---|---|
+| <http://localhost:5173/admin> | 列表 | 全部竞拍 + 开始/取消（需登录） |
+| `/admin/create` | 发布 | 创建新竞拍（需登录） |
+
+> 用户端页面按手机尺寸设计。桌面浏览器访问会自动套一个 iPhone 形状的边框（含灵动岛 + 状态栏），方便预览真机效果。窗口宽度 < 768px 时边框自动隐藏。
 
 ---
 
@@ -265,14 +275,16 @@ auction-system/
         │   ├── StatusBadge.tsx
         │   ├── Countdown.tsx
         │   ├── RequireAuth.tsx    # 未登录跳 /login 的路由守卫
-        │   └── PhoneFrame.tsx     # 桌面端把用户端套进 iPhone 边框
+        │   ├── PhoneFrame.tsx     # 桌面端把用户端套进 iPhone 边框
+        │   └── BottomNav.tsx      # 底部 Tab：🏠 大厅 / 👤 我的
         └── pages/
-            ├── UserHall.tsx       # /
-            ├── Login.tsx          # /login（登录/注册 tab）
-            ├── AuctionDetail.tsx  # /auction/:id（含 WS 实时刷新）
-            ├── OrderPage.tsx      # /auction/:id/order
-            ├── AdminList.tsx      # /admin（需登录）
-            └── AdminCreate.tsx    # /admin/create（需登录）
+            ├── UserHall.tsx       # /         大厅
+            ├── Me.tsx             # /me       我的（含商家入口）
+            ├── Login.tsx          # /login    登录 / 注册
+            ├── AuctionDetail.tsx  # /auction/:id        实时详情
+            ├── OrderPage.tsx      # /auction/:id/order  订单
+            ├── AdminList.tsx      # /admin            商家列表
+            └── AdminCreate.tsx    # /admin/create     发布竞拍
 ```
 
 ---

@@ -1,15 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Auction } from '../lib/types'
 import { StatusBadge } from '../components/StatusBadge'
-import { clearAuth, getUser } from '../lib/auth'
+import { BottomNav } from '../components/BottomNav'
 
 export function UserHall() {
-  const nav = useNavigate()
   const [auctions, setAuctions] = useState<Auction[]>([])
   const [loading, setLoading] = useState(true)
-  const me = getUser()
 
   useEffect(() => {
     api
@@ -23,55 +21,17 @@ export function UserHall() {
   }, [])
 
   return (
-    <div className="min-h-screen max-w-md mx-auto px-4 pb-12">
-      {/* 顶部玻璃栏 */}
+    <div className="min-h-screen max-w-md mx-auto px-4 pb-24">
       <header className="sticky top-3 z-20 mt-3">
-        <div className="glass rounded-3xl px-4 py-3 flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-bold tracking-tight">🛒 拍卖大厅</h1>
-            <p className="text-[11px] text-ink-500">实时竞拍 · 价高者得</p>
-          </div>
-          {me ? (
-            <div className="flex items-center gap-2">
-              <div className="text-right">
-                <div className="text-xs text-ink-500">登录为</div>
-                <div className="text-sm font-medium text-ink-900">{me.username}</div>
-              </div>
-              <button
-                onClick={() => {
-                  clearAuth()
-                  nav(0)
-                }}
-                className="btn-glass px-3 py-1.5 rounded-full text-xs"
-              >
-                退出
-              </button>
-            </div>
-          ) : (
-            <Link
-              to="/login"
-              className="btn-accent px-4 py-2 rounded-full text-sm"
-            >
-              登录 / 注册
-            </Link>
-          )}
+        <div className="glass rounded-3xl px-4 py-3">
+          <h1 className="text-lg font-bold tracking-tight">🛒 拍卖大厅</h1>
+          <p className="text-[11px] text-ink-500 mt-0.5">实时竞拍 · 价高者得</p>
         </div>
       </header>
 
-      {/* 商家入口 */}
-      <Link
-        to="/admin"
-        className="block text-center text-xs text-ink-400 py-3 hover:text-ink-700"
-      >
-        → 进入商家后台
-      </Link>
-
-      {/* 列表 */}
-      <div className="space-y-3">
+      <div className="space-y-3 mt-4">
         {loading && (
-          <div className="glass rounded-2xl p-12 text-center text-ink-400">
-            加载中...
-          </div>
+          <div className="glass rounded-2xl p-12 text-center text-ink-400">加载中...</div>
         )}
         {!loading && auctions.length === 0 && (
           <div className="glass rounded-2xl p-12 text-center text-ink-400">
@@ -117,6 +77,8 @@ export function UserHall() {
           </Link>
         ))}
       </div>
+
+      <BottomNav />
     </div>
   )
 }

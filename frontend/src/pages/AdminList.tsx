@@ -68,12 +68,6 @@ export function AdminList() {
                 </button>
               </div>
             )}
-            <Link
-              to="/"
-              className="text-xs text-ink-400 hover:text-ink-700"
-            >
-              → 用户端
-            </Link>
           </div>
         </div>
       </header>
