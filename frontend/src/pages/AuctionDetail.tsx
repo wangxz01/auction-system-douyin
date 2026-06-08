@@ -47,8 +47,11 @@ export function AuctionDetail() {
   const hasBidRef = useRef(false)
   const toastIdRef = useRef(0)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const backdropRef = useRef<HTMLVideoElement>(null)
   const [videoLoading, setVideoLoading] = useState(true)
   const [usingFallback, setUsingFallback] = useState(false)
+  // 'cover' = 充满（竖屏/方形适用）；'contain' = 保留完整画面（横屏适用）
+  const [fitMode, setFitMode] = useState<'cover' | 'contain'>('cover')
 
   // 视频源加载策略：HLS → 原生 HLS → 兜底本地
   useEffect(() => {
@@ -58,6 +61,7 @@ export function AuctionDetail() {
 
     setVideoLoading(true)
     setUsingFallback(false)
+    setFitMode('cover') // 默认满屏，加载完元数据后根据宽高再决定
     let hls: Hls | null = null
     let cancelled = false
 
@@ -247,15 +251,37 @@ export function AuctionDetail() {
 
   return (
     <div className="live-room">
+      {/* 背景层：仅在 contain 模式（横屏视频）时显示，避免单调黑边 */}
+      {fitMode === 'contain' && (
+        <video
+          ref={backdropRef}
+          className="live-video-backdrop"
+          autoPlay
+          loop
+          muted
+          playsInline
+          aria-hidden="true"
+          src={videoRef.current?.currentSrc || undefined}
+        />
+      )}
+
       {/* 视频底层（src 由 useEffect 根据 stream_url 设置） */}
       <video
         ref={videoRef}
-        className="live-video"
+        className={`live-video fit-${fitMode}`}
         autoPlay
         loop
         muted
         playsInline
         poster={`https://picsum.photos/seed/${auctionId}/720/1280`}
+        onLoadedMetadata={() => {
+          const v = videoRef.current
+          if (!v || !v.videoWidth || !v.videoHeight) return
+          const ratio = v.videoWidth / v.videoHeight
+          // 横屏（宽高比 ≥ 1.1）→ contain 保留全画面 + 模糊背景
+          // 竖屏/方形 → cover 充满
+          setFitMode(ratio >= 1.1 ? 'contain' : 'cover')
+        }}
       />
 
       {/* 加载提示 */}
