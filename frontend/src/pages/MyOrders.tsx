@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import type { MyOrderEntry } from '../lib/types'
-import { BottomNav } from '../components/BottomNav'
 
 export function MyOrders() {
   const nav = useNavigate()
@@ -17,7 +16,7 @@ export function MyOrders() {
   }, [])
 
   return (
-    <div className="min-h-screen max-w-md mx-auto pb-28">
+    <div className="min-h-screen max-w-md mx-auto pb-8">
       <div className="px-5 pt-5 pb-3 flex items-center justify-between">
         <h1 className="ios-large-title">我的订单</h1>
         <Link to="/me" className="text-[#FF9500] text-sm">返回</Link>
@@ -98,8 +97,6 @@ export function MyOrders() {
           )
         })}
       </div>
-
-      <BottomNav />
     </div>
   )
 }

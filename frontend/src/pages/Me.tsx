@@ -85,24 +85,6 @@ export function Me() {
         </button>
       </div>
 
-      {/* 商家分组 */}
-      <div className="ios-section-header mt-6">商家</div>
-      <div className="ios-list">
-        <button
-          className="ios-list-item ios-list-item-chevron"
-          onClick={() => {
-            if (!me) {
-              nav('/login?from=/admin')
-              return
-            }
-            nav('/admin')
-          }}
-        >
-          <span className="text-xl w-7 text-center">🛠️</span>
-          <span className="flex-1">商家后台</span>
-        </button>
-      </div>
-
       {/* 关于 */}
       <div className="ios-section-header mt-6">关于</div>
       <div className="ios-list">
