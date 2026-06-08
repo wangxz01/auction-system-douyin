@@ -203,7 +203,10 @@ export function AuctionDetail() {
       <div className="live-overlay-bottom" />
 
       {/* 顶部：主播 + 关注 */}
-      <div className="absolute top-3 left-3 right-3 z-10 flex items-center gap-2">
+      <div
+        className="absolute left-3 right-3 z-10 flex items-center gap-2"
+        style={{ top: 'var(--safe-top)' }}
+      >
         <div
           className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0 ring-2 ring-white/30"
           style={{ background: 'linear-gradient(135deg, #FE2C55, #FF6B85)' }}
@@ -230,7 +233,10 @@ export function AuctionDetail() {
 
       {/* 倒计时 */}
       {auction.status === 'active' && secLeft > 0 && (
-        <div className="absolute top-[60px] left-3 z-10">
+        <div
+          className="absolute left-3 z-10"
+          style={{ top: 'calc(var(--safe-top) + 52px)' }}
+        >
           <span className={`countdown-pill ${secLeft < 10 ? 'urgent' : ''}`}>
             <span className="dot" />
             <span>距结束 {fmtTime(secLeft)}</span>
@@ -240,7 +246,10 @@ export function AuctionDetail() {
 
       {/* 排行榜 */}
       {topBids.length > 0 && (
-        <div className="absolute right-3 top-[120px] z-10 w-36 live-glass p-2.5">
+        <div
+          className="absolute right-3 z-10 w-36 live-glass p-2.5"
+          style={{ top: 'calc(var(--safe-top) + 108px)' }}
+        >
           <div className="text-[11px] text-white/75 mb-1.5 px-1 flex items-center gap-1 font-medium">
             <span>🏆</span>
             <span>出价榜</span>

@@ -210,6 +210,13 @@ body {
   background: #000;
   overflow: hidden;
   color: #fff;
+
+  /* 顶部安全偏移：移动端跟 iOS 安全区域，桌面端避开灵动岛/状态栏 */
+  --safe-top: max(env(safe-area-inset-top, 12px), 14px);
+}
+/* 桌面端在手机壳内时，预留灵动岛 + 状态栏空间 */
+.phone-content .live-room {
+  --safe-top: 56px;
 }
 
 .live-video {
