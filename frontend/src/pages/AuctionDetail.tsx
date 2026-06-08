@@ -346,33 +346,33 @@ export function AuctionDetail() {
       <div className="live-overlay-top" />
       <div className="live-overlay-bottom" />
 
-      {/* 顶部：主播 + 关注 */}
+      {/* 顶部：主播 + 关注 —— 玻璃胶囊统一框 */}
       <div
-        className="absolute left-3 right-3 z-10 flex items-center gap-2"
+        className="absolute left-3 right-3 z-10"
         style={{ top: 'var(--safe-top)' }}
       >
-        <div
-          className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0 ring-2 ring-white/30"
-          style={{ background: 'linear-gradient(135deg, #FE2C55, #FF6B85)' }}
-        >
-          {auction.title.slice(0, 1).toUpperCase()}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="text-white text-sm font-semibold truncate" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}>
-              {auction.title}的直播间
-            </span>
-            <span className="px-1.5 py-0.5 bg-[#FE2C55] text-[9px] rounded font-bold text-white tracking-wider">
-              LIVE
-            </span>
+        <div className="live-glass-pill flex items-center gap-2 pl-1 pr-3 py-1">
+          <div
+            className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
+            style={{ background: 'linear-gradient(135deg, #FE2C55, #FF6B85)' }}
+          >
+            {auction.title.slice(0, 1).toUpperCase()}
           </div>
-          <div className="text-white/85 text-[11px] mt-0.5 flex items-center gap-2" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}>
-            <span>👥 {viewers} 人在看</span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-white text-[13px] font-semibold truncate">
+                {auction.title}的直播间
+              </span>
+              <span className="px-1 py-px bg-[#FE2C55] text-[9px] rounded font-bold text-white tracking-wider">
+                LIVE
+              </span>
+            </div>
+            <div className="text-white/75 text-[10px] mt-px">👥 {viewers} 人在看</div>
           </div>
+          <button className="live-text-btn white text-sm shrink-0" style={{ padding: '2px 8px' }}>
+            + 关注
+          </button>
         </div>
-        <button className="live-text-btn white text-sm">
-          + 关注
-        </button>
       </div>
 
       {/* 倒计时 */}
@@ -435,8 +435,8 @@ export function AuctionDetail() {
         ))}
       </div>
 
-      {/* 商品信息卡 */}
-      <div className="absolute left-3 right-3 bottom-[76px] z-10">
+      {/* 商品信息卡（位于底部统一容器上方） */}
+      <div className="absolute left-3 right-3 z-10" style={{ bottom: 'calc(140px + env(safe-area-inset-bottom))' }}>
         <div className="live-glass p-3.5">
           <div className="text-white text-sm font-semibold mb-1 truncate" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}>
             {auction.title}
@@ -467,60 +467,66 @@ export function AuctionDetail() {
         </div>
       </div>
 
-      {/* 加价倍数快捷选择 */}
+      {/* 底部统一玻璃容器：倍数 chips + 评论占位 + 出价按钮 */}
       {auction.status === 'active' && (
         <div
-          className="absolute left-0 right-0 z-10 px-4 flex items-center gap-5 text-sm whitespace-nowrap overflow-x-auto"
-          style={{ bottom: 'calc(48px + env(safe-area-inset-bottom))' }}
+          className="absolute left-2 right-2 bottom-2 z-10 live-glass px-3 pt-2"
+          style={{ paddingBottom: 'calc(8px + env(safe-area-inset-bottom))' }}
         >
-          {[1, 2, 5, 10].map((m) => {
-            const selected = matchedMultiplier === m
-            return (
-              <button
-                key={m}
-                onClick={() => setBidAmount(auction.current_price + m * auction.price_step)}
-                className={`live-text-btn ${selected ? 'gold' : 'muted'}`}
-              >
-                +¥{(m * auction.price_step).toLocaleString()}
-              </button>
-            )
-          })}
-          <button
-            onClick={() => {
-              setCustomInput(String(minBid))
-              setShowCustomModal(true)
-            }}
-            className={`live-text-btn ${matchedMultiplier === 0 || ![1, 2, 5, 10].includes(matchedMultiplier) ? 'gold' : 'white'}`}
-          >
-            自定义
-          </button>
-        </div>
-      )}
-
-      {/* 底部出价栏 —— 全字体风格 */}
-      {auction.status === 'active' && (
-        <div
-          className="absolute left-0 right-0 bottom-0 z-10 px-4 pt-2 flex items-center gap-3"
-          style={{ paddingBottom: 'calc(10px + env(safe-area-inset-bottom))' }}
-        >
-          <div className="flex-1 text-white/55 text-sm live-text-shadow truncate">
-            说点什么...
+          {/* 加价倍数 */}
+          <div className="flex items-center gap-5 text-sm whitespace-nowrap overflow-x-auto pb-2">
+            {[1, 2, 5, 10].map((m) => {
+              const selected = matchedMultiplier === m
+              return (
+                <button
+                  key={m}
+                  onClick={() => setBidAmount(auction.current_price + m * auction.price_step)}
+                  className={`live-text-btn ${selected ? 'gold' : 'muted'}`}
+                >
+                  +¥{(m * auction.price_step).toLocaleString()}
+                </button>
+              )
+            })}
+            <button
+              onClick={() => {
+                setCustomInput(String(minBid))
+                setShowCustomModal(true)
+              }}
+              className={`live-text-btn ${
+                matchedMultiplier === 0 || ![1, 2, 5, 10].includes(matchedMultiplier)
+                  ? 'gold'
+                  : 'white'
+              }`}
+            >
+              自定义
+            </button>
           </div>
-          <button
-            onClick={handleBid}
-            disabled={submitting}
-            className="live-text-btn gold text-base"
-          >
-            {submitting
-              ? '出价中...'
-              : isLoggedIn()
-              ? `出价 ¥${bidAmount.toLocaleString()}`
-              : `登录出价`}
-          </button>
+
+          {/* 分隔线 */}
+          <div className="h-px bg-white/12 -mx-3" />
+
+          {/* 评论占位 + 出价 */}
+          <div className="flex items-center gap-3 pt-2">
+            <div className="flex-1 text-white/55 text-sm truncate">说点什么...</div>
+            <button
+              onClick={handleBid}
+              disabled={submitting}
+              className="live-text-btn gold text-base"
+            >
+              {submitting
+                ? '出价中...'
+                : isLoggedIn()
+                ? `出价 ¥${bidAmount.toLocaleString()}`
+                : `登录出价`}
+            </button>
+          </div>
         </div>
       )}
       {auction.status === 'pending' && !finished && !cancelled && (
-        <div className="absolute left-0 right-0 bottom-0 z-10 px-3 pb-5 pt-2 text-center text-white/80 text-sm bg-black/40 backdrop-blur">
+        <div
+          className="absolute left-2 right-2 bottom-2 z-10 live-glass px-4 py-4 text-center text-white/80 text-sm"
+          style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}
+        >
           竞拍尚未开始，敬请期待
         </div>
       )}

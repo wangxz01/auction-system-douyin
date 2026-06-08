@@ -263,13 +263,20 @@ body {
   z-index: 1;
 }
 
-/* 深色半透明卡片（浮层基底） */
+/* 统一玻璃框（所有浮层基底，方便后续切液态玻璃） */
 .live-glass {
-  background: rgba(0, 0, 0, 0.42);
-  backdrop-filter: blur(14px) saturate(180%);
-  -webkit-backdrop-filter: blur(14px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 14px;
+}
+.live-glass-pill {
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
 }
 
 /* 直播间字体按钮：纯文字 + 阴影，避免遮挡视频 */
@@ -291,39 +298,41 @@ body {
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.75);
 }
 
-/* 倒计时胶囊 */
+/* 倒计时胶囊 —— 沿用统一玻璃框，仅文字+小红点是红色 */
 .countdown-pill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  background: linear-gradient(135deg, #FF4567, #FE2C55);
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   color: white;
   font-weight: 600;
   font-size: 13px;
-  padding: 5px 12px 5px 9px;
+  padding: 5px 12px 5px 10px;
   border-radius: 999px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    0 2px 10px rgba(254, 44, 85, 0.55);
 }
 .countdown-pill .dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: white;
-  box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7);
+  background: #FF4567;
+  box-shadow: 0 0 0 0 rgba(255, 69, 103, 0.7);
   animation: live-dot 1.2s ease-in-out infinite;
 }
 @keyframes live-dot {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7); }
-  50% { box-shadow: 0 0 0 5px rgba(255, 255, 255, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 69, 103, 0.7); }
+  50%      { box-shadow: 0 0 0 6px rgba(255, 69, 103, 0); }
 }
+/* 剩余时间不足 10s：文字变红 + 轻微缩放，外框保持玻璃 */
 .countdown-pill.urgent {
+  color: #FF6B85;
   animation: countdown-urgent 0.8s ease-in-out infinite;
 }
 @keyframes countdown-urgent {
   0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.08); box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 4px 20px rgba(254,44,85,0.9); }
+  50%      { transform: scale(1.08); }
 }
 
 /* 价格弹跳 */
