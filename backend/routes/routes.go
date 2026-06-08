@@ -31,6 +31,7 @@ func Register(r *gin.Engine) {
 		api.GET("/auctions/:id", controllers.GetAuction)
 		api.GET("/auctions/:id/bids", controllers.GetBids)
 		api.GET("/auctions/:id/order", controllers.GetOrder)
+		api.GET("/auctions/:id/comments", controllers.GetComments)
 
 		// 需要登录的接口
 		auth := api.Group("")
@@ -42,6 +43,7 @@ func Register(r *gin.Engine) {
 			auth.POST("/auctions/:id/start", controllers.StartAuction)
 			auth.POST("/auctions/:id/cancel", controllers.CancelAuction)
 			auth.POST("/auctions/:id/bids", controllers.PlaceBid)
+			auth.POST("/auctions/:id/comments", controllers.CreateComment)
 
 			// 当前用户的聚合数据
 			auth.GET("/me/bids", controllers.GetMyBids)

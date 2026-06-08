@@ -37,6 +37,15 @@ export interface Order {
   updated_at: string
 }
 
+export interface AuctionComment {
+  id: number
+  auction_id: number
+  user_id: number
+  username: string
+  content: string
+  created_at: string
+}
+
 export interface TopBid {
   user_id: number
   amount: number
@@ -69,5 +78,10 @@ export type WSMessage =
       auction_id: number
       final_price: number
       winner_id: number | null
+    }
+  | {
+      type: 'new_comment'
+      auction_id: number
+      comment: AuctionComment
     }
   | { type: 'auction_cancelled'; auction_id: number }

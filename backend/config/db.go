@@ -30,6 +30,7 @@ func InitDB(cfg *Config) {
 		&models.Auction{},
 		&models.Bid{},
 		&models.Order{},
+		&models.Comment{},
 	); err != nil {
 		log.Fatalf("❌ AutoMigrate 失败: %v", err)
 	}

@@ -4,27 +4,13 @@ import Hls from 'hls.js'
 import { api } from '../api/client'
 import { getUser, isLoggedIn } from '../lib/auth'
 import { AuctionWS } from '../lib/ws'
-import type { Auction, Bid, TopBid, WSMessage } from '../lib/types'
+import type { Auction, AuctionComment, Bid, TopBid, WSMessage } from '../lib/types'
 
 // 兜底本地视频（放在 public/ 下，可被 / 直接访问）
 const FALLBACK_VIDEO = '/live.mp4'
 
 type Toast = { kind: 'win' | 'lose' | 'info'; text: string; id: number } | null
 type FinishedInfo = { final_price: number; winner_id: number | null } | null
-
-// 假评论池 —— 让直播间感觉有人在
-const FAKE_COMMENTS = [
-  '666',
-  '主播看看这个',
-  '我先收藏了',
-  '价格还能再降吗',
-  '冲！',
-  '蹲一个',
-  '👏👏👏',
-  '太便宜了吧',
-  '上车',
-  '老粉了',
-]
 
 export function AuctionDetail() {
   const { id } = useParams<{ id: string }>()
@@ -42,7 +28,7 @@ export function AuctionDetail() {
   const [finished, setFinished] = useState<FinishedInfo>(null)
   const [cancelled, setCancelled] = useState(false)
   const [secLeft, setSecLeft] = useState(0)
-  const [comments, setComments] = useState<string[]>([])
+  const [comments, setComments] = useState<AuctionComment[]>([])
 
   const hasBidRef = useRef(false)
   const toastIdRef = useRef(0)
@@ -140,6 +126,9 @@ export function AuctionDetail() {
       setTopBids(arr.slice(0, 5).map((b) => ({ user_id: b.user_id, amount: b.amount })))
       if (arr.some((b) => b.user_id === uid)) hasBidRef.current = true
     })
+    api.get<{ data: AuctionComment[] }>(`/auctions/${auctionId}/comments`).then((r) => {
+      setComments(r.data.data)
+    })
   }, [auctionId, uid])
 
   // WebSocket
@@ -176,16 +165,6 @@ export function AuctionDetail() {
     return () => clearTimeout(t)
   }, [toast])
 
-  // 弹幕轮播（每 2.5s 加一条）
-  useEffect(() => {
-    if (auction?.status !== 'active') return
-    const t = setInterval(() => {
-      const c = FAKE_COMMENTS[Math.floor(Math.random() * FAKE_COMMENTS.length)]
-      setComments((prev) => [...prev.slice(-3), `游客${Math.floor(Math.random() * 9000 + 1000)}: ${c}`])
-    }, 2500)
-    return () => clearInterval(t)
-  }, [auction?.status])
-
   const handleMessage = (msg: WSMessage) => {
     if (msg.type === 'auction_started') {
       setAuction((p) => (p ? { ...p, status: 'active', ends_at: msg.ends_at } : p))
@@ -212,6 +191,8 @@ export function AuctionDetail() {
     } else if (msg.type === 'auction_finished') {
       setFinished({ final_price: msg.final_price, winner_id: msg.winner_id })
       setAuction((p) => (p ? { ...p, status: 'finished' } : p))
+    } else if (msg.type === 'new_comment') {
+      setComments((prev) => [...prev.slice(-49), msg.comment])
     } else if (msg.type === 'auction_cancelled') {
       setCancelled(true)
       setAuction((p) => (p ? { ...p, status: 'cancelled' } : p))
@@ -268,16 +249,25 @@ export function AuctionDetail() {
     }
   }
 
-  const sendComment = () => {
+  const sendComment = async () => {
     const text = commentInput.trim()
     if (!text) {
       setShowCommentModal(false)
       return
     }
-    const name = me?.username ?? `游客${String(uid || Date.now()).slice(-4)}`
-    setComments((prev) => [...prev.slice(-4), `${name}: ${text}`])
-    setCommentInput('')
-    setShowCommentModal(false)
+    if (!isLoggedIn()) {
+      const from = encodeURIComponent(`/auction/${auctionId}`)
+      navigate(`/login?from=${from}`)
+      return
+    }
+    try {
+      await api.post(`/auctions/${auctionId}/comments`, { content: text })
+      setCommentInput('')
+      setShowCommentModal(false)
+    } catch (e: unknown) {
+      const r = (e as { response?: { data?: { error?: string } } }).response
+      alert(r?.data?.error ?? '评论发送失败')
+    }
   }
 
   const confirmCustom = () => {
@@ -444,9 +434,9 @@ export function AuctionDetail() {
 
       {/* 弹幕（左下，商品卡上方） */}
       <div className="absolute bottom-[170px] left-3 right-32 z-10 pointer-events-none flex flex-col items-start">
-        {comments.slice(-3).map((c, i) => (
-          <div key={`${c}-${i}`} className="comment-bubble fade-up">
-            {c}
+        {comments.slice(-3).map((c) => (
+          <div key={c.id} className="comment-bubble fade-up">
+            {c.username}: {c.content}
           </div>
         ))}
       </div>
@@ -569,7 +559,7 @@ export function AuctionDetail() {
                 value={commentInput}
                 onChange={(e) => setCommentInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') sendComment()
+                  if (e.key === 'Enter') void sendComment()
                   if (e.key === 'Escape') setShowCommentModal(false)
                 }}
                 placeholder="参与互动"
@@ -578,7 +568,7 @@ export function AuctionDetail() {
                 className="flex-1 bg-transparent text-white text-base outline-none placeholder:text-white/40"
               />
               <button
-                onClick={sendComment}
+                onClick={() => void sendComment()}
                 className="live-text-btn gold text-base"
               >
                 发送
