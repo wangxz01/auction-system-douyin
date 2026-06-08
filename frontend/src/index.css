@@ -32,9 +32,9 @@ html, body, #root {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* 移动设备：淡灰应用底色 */
+/* 移动设备：iOS systemGroupedBackground */
 body {
-  background: #F2F2F4;
+  background: #F2F2F7;
 }
 
 /* ============================================================
@@ -200,6 +200,86 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.25); }
 
 /* ============================================================
+   🍎 iOS 风格组件（参考 Konsta UI）
+   ============================================================ */
+
+/* 大标题（iOS Large Title） */
+.ios-large-title {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  line-height: 1.1;
+  color: #000000;
+}
+
+/* 分组小标题（iOS Section Header） */
+.ios-section-header {
+  font-size: 13px;
+  font-weight: 400;
+  color: #6C6C70;
+  text-transform: none;
+  padding: 8px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Inset 分组列表（iOS Grouped List） */
+.ios-list {
+  background: #ffffff;
+  border-radius: 12px;
+  margin: 0 16px;
+  overflow: hidden;
+}
+
+.ios-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 16px;
+  min-height: 44px;
+  background: #ffffff;
+  position: relative;
+  transition: background-color 0.1s ease;
+  width: 100%;
+  text-align: left;
+  color: #000;
+  font-size: 16px;
+}
+.ios-list-item:active:not(:disabled) { background: #E5E5EA; }
+.ios-list-item:disabled { color: #C7C7CC; cursor: not-allowed; }
+
+/* 发丝级分隔线（iOS hairline，1px on standard / 0.5px on retina） */
+.ios-list-item + .ios-list-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 52px;
+  right: 0;
+  height: 1px;
+  background: rgba(60, 60, 67, 0.12);
+  transform: scaleY(0.5);
+  transform-origin: top;
+}
+.ios-list-item.no-icon + .ios-list-item::before { left: 16px; }
+
+.ios-list-item-chevron::after {
+  content: '';
+  display: block;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid #C7C7CC;
+  border-top: 1.5px solid #C7C7CC;
+  transform: rotate(45deg);
+  margin-left: 4px;
+}
+
+/* iOS 顶部安全工具栏 */
+.ios-nav-spacer {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* ============================================================
    📱 BottomNav（用户端底部）
    ============================================================ */
 .bottom-nav {
@@ -210,23 +290,34 @@ body {
   z-index: 50;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
-  padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+  background: rgba(248, 248, 248, 0.94);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
+  position: fixed;
+}
+.bottom-nav::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(60, 60, 67, 0.18);
+  transform: scaleY(0.5);
+  transform-origin: top;
 }
 .bottom-nav-item {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #a6a6ad;
-  padding: 6px 0;
-  transition: color 0.15s ease, transform 0.15s ease;
+  color: #8E8E93;
+  padding: 4px 0;
+  font-weight: 500;
+  transition: color 0.12s ease;
 }
 .bottom-nav-item.is-active { color: #FF9500; }
-.bottom-nav-item.is-active .text-xl { transform: scale(1.1); }
 
 /* ============================================================
    🖥️ AdminSidebar（商家左侧导航，2.jpg 风格）
@@ -314,7 +405,7 @@ body {
     border-radius: 44px;
     overflow: hidden;
     position: relative;
-    background: #F2F2F4;
+    background: #F2F2F7;
   }
 
   .phone-screen::before {

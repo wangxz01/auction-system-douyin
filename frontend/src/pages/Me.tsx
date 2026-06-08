@@ -12,56 +12,74 @@ export function Me() {
   }
 
   return (
-    <div className="min-h-screen max-w-md mx-auto px-4 pb-24">
-      <div className="pt-4 pb-2">
-        <h1 className="text-3xl font-bold tracking-tight">我的</h1>
-        <p className="text-xs text-ink-500 mt-1">账户与设置</p>
+    <div className="min-h-screen max-w-md mx-auto pb-28">
+      <div className="px-5 pt-5 pb-3">
+        <h1 className="ios-large-title">我的</h1>
       </div>
 
       {/* 用户卡 */}
-      <div className="card p-6 text-center mt-3 fade-up">
-        <div
-          className="w-20 h-20 rounded-full mx-auto mb-3 flex items-center justify-center text-3xl text-white font-bold"
-          style={{
-            background: 'linear-gradient(135deg, #FFD451 0%, #FF9500 100%)',
-            boxShadow: '0 6px 16px rgba(255,149,0,0.3)',
-          }}
-        >
-          {me ? me.username.slice(0, 1).toUpperCase() : '👤'}
-        </div>
-        {me ? (
-          <>
-            <div className="text-xl font-bold">{me.username}</div>
-            <div className="text-xs text-ink-500 mt-1">UID #{me.user_id}</div>
+      <div className="px-4 mt-2">
+        <div className="bg-white rounded-2xl px-5 py-5 flex items-center gap-4">
+          <div
+            className="w-14 h-14 rounded-full flex items-center justify-center text-xl text-white font-bold shrink-0"
+            style={{
+              background: 'linear-gradient(135deg, #FFD451 0%, #FF9500 100%)',
+              boxShadow: '0 4px 10px rgba(255,149,0,0.25)',
+            }}
+          >
+            {me ? me.username.slice(0, 1).toUpperCase() : '👤'}
+          </div>
+          <div className="flex-1 min-w-0">
+            {me ? (
+              <>
+                <div className="text-lg font-semibold truncate">{me.username}</div>
+                <div className="text-xs text-[#8E8E93] mt-0.5">UID #{me.user_id}</div>
+              </>
+            ) : (
+              <>
+                <div className="text-base font-medium text-[#3C3C43]">尚未登录</div>
+                <div className="text-xs text-[#8E8E93] mt-0.5">登录后参与竞拍</div>
+              </>
+            )}
+          </div>
+          {me ? (
             <button
               onClick={logout}
-              className="btn-default mt-4 px-5 py-2 rounded-full text-sm"
+              className="text-sm text-[#FF3B30] font-medium px-3 py-1.5"
             >
-              退出登录
+              退出
             </button>
-          </>
-        ) : (
-          <>
-            <div className="text-ink-500 text-sm mb-3">尚未登录</div>
+          ) : (
             <button
               onClick={() => nav('/login?from=/me')}
-              className="btn-accent px-6 py-2 rounded-full text-sm"
+              className="text-sm text-[#FF9500] font-semibold px-3 py-1.5"
             >
-              立即登录
+              登录
             </button>
-          </>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* 菜单 */}
-      <div className="card mt-3 overflow-hidden fade-up">
-        <MenuRow icon="📜" label="我的拍卖记录" hint="功能开发中" disabled />
-        <Divider />
-        <MenuRow icon="📋" label="我的订单" hint="功能开发中" disabled />
-        <Divider />
-        <MenuRow
-          icon="🛠️"
-          label="商家后台"
+      {/* 拍卖记录分组 */}
+      <div className="ios-section-header mt-6">拍卖</div>
+      <div className="ios-list">
+        <button className="ios-list-item" disabled>
+          <span className="text-xl w-7 text-center">📜</span>
+          <span className="flex-1">我的拍卖记录</span>
+          <span className="text-xs text-[#8E8E93]">开发中</span>
+        </button>
+        <button className="ios-list-item" disabled>
+          <span className="text-xl w-7 text-center">📋</span>
+          <span className="flex-1">我的订单</span>
+          <span className="text-xs text-[#8E8E93]">开发中</span>
+        </button>
+      </div>
+
+      {/* 商家分组 */}
+      <div className="ios-section-header mt-6">商家</div>
+      <div className="ios-list">
+        <button
+          className="ios-list-item ios-list-item-chevron"
           onClick={() => {
             if (!me) {
               nav('/login?from=/admin')
@@ -69,50 +87,22 @@ export function Me() {
             }
             nav('/admin')
           }}
-        />
+        >
+          <span className="text-xl w-7 text-center">🛠️</span>
+          <span className="flex-1">商家后台</span>
+        </button>
       </div>
 
-      <div className="text-center text-xs text-ink-400 mt-6">
-        拍卖系统 v0.7
+      {/* 关于 */}
+      <div className="ios-section-header mt-6">关于</div>
+      <div className="ios-list">
+        <div className="ios-list-item no-icon">
+          <span className="flex-1 text-[#8E8E93]">版本</span>
+          <span className="text-sm text-[#8E8E93]">v0.7</span>
+        </div>
       </div>
 
       <BottomNav />
     </div>
   )
-}
-
-function MenuRow({
-  icon,
-  label,
-  hint,
-  disabled,
-  onClick,
-}: {
-  icon: string
-  label: string
-  hint?: string
-  disabled?: boolean
-  onClick?: () => void
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`w-full flex items-center gap-3 px-5 py-3.5 text-left transition-colors ${
-        disabled ? 'text-ink-400 cursor-not-allowed' : 'hover:bg-app-50 active:bg-app-100'
-      }`}
-    >
-      <span className="text-xl">{icon}</span>
-      <span className="flex-1 text-sm font-medium">{label}</span>
-      {hint ? (
-        <span className="text-xs text-ink-400">{hint}</span>
-      ) : (
-        <span className="text-ink-300">›</span>
-      )}
-    </button>
-  )
-}
-
-function Divider() {
-  return <div className="border-t border-app-100 mx-5" />
 }

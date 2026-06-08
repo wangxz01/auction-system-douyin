@@ -135,22 +135,22 @@ export function AuctionDetail() {
     const isWinner = finished.winner_id === uid
     return (
       <div className="min-h-screen max-w-md mx-auto px-4 py-6">
-        <div className="text-center pt-8 pb-6">
+        <div className="text-center pt-10 pb-6">
           <div className="text-7xl mb-3">{isWinner ? '🏆' : '🔨'}</div>
-          <h1 className="text-2xl font-bold mb-1">竞拍结束</h1>
-          <p className="text-ink-500 text-sm">{auction.title}</p>
+          <h1 className="ios-large-title text-2xl mb-1">竞拍结束</h1>
+          <p className="text-[#8E8E93] text-sm">{auction.title}</p>
         </div>
-        <div className="card p-7 text-center mb-4">
-          <p className="text-xs text-ink-500 mb-1">成交价</p>
-          <p className="text-5xl font-bold text-accent-600 my-2">¥{finished.final_price}</p>
-          <p className="text-xs text-ink-500 mt-2">
+        <div className="bg-white rounded-2xl p-7 text-center mb-4">
+          <p className="text-xs text-[#8E8E93] mb-1">成交价</p>
+          <p className="text-5xl font-bold text-[#FF9500] my-2">¥{finished.final_price}</p>
+          <p className="text-xs text-[#8E8E93] mt-2">
             得主：UID {finished.winner_id ?? '无人出价'}
-            {isWinner && <span className="ml-1 text-accent-600 font-medium">(你)</span>}
+            {isWinner && <span className="ml-1 text-[#FF9500] font-medium">(你)</span>}
           </p>
         </div>
         {isWinner && (
           <>
-            <div className="text-center text-accent-700 font-medium mb-3">
+            <div className="text-center text-[#FF9500] font-medium mb-3">
               🎉 恭喜你拍得此商品！
             </div>
             <button
@@ -161,142 +161,138 @@ export function AuctionDetail() {
             </button>
           </>
         )}
-        <Link to="/" className="block text-center text-ink-400 text-sm mt-6 hover:text-ink-700">
-          ← 返回大厅
+        <Link to="/" className="block text-center text-[#FF9500] text-sm mt-6">
+          返回大厅
         </Link>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen max-w-md mx-auto px-4 pb-32">
+    <div className="min-h-screen max-w-md mx-auto pb-32">
       {/* 顶部 banner */}
       {banner && (
-        <div
-          className={`mt-3 rounded-2xl px-4 py-2.5 text-center text-sm font-medium border ${
-            banner.kind === 'success'
-              ? 'bg-green-50 text-green-700 border-green-200'
-              : banner.kind === 'warn'
-              ? 'bg-amber-50 text-amber-700 border-amber-200'
-              : 'bg-blue-50 text-blue-700 border-blue-200'
-          }`}
-        >
-          {banner.text}
+        <div className="px-4 mt-3">
+          <div
+            className={`rounded-xl px-4 py-2.5 text-center text-sm font-medium ${
+              banner.kind === 'success'
+                ? 'bg-[#34C75933] text-[#1F7A2B]'
+                : banner.kind === 'warn'
+                ? 'bg-[#FF950033] text-[#9B5C00]'
+                : 'bg-[#5AC8FA33] text-[#0E5E80]'
+            }`}
+          >
+            {banner.text}
+          </div>
         </div>
       )}
 
       {/* WS 状态条 */}
       {wsStatus !== 'open' && (
-        <div className="mt-2 text-center text-xs text-ink-500 bg-app-100 rounded-full py-1.5">
+        <div className="text-center text-xs text-[#8E8E93] py-1.5 mt-2">
           {wsStatus === 'reconnecting' ? '🔄 正在连接实时通道...' : '⚠️ 实时通道已断开'}
         </div>
       )}
 
-      {/* 商品信息卡 */}
-      <div className="card mt-3 p-4 fade-up">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1">
-            <h1 className="text-xl font-bold tracking-tight">{auction.title}</h1>
-            {auction.description && (
-              <p className="text-ink-500 text-sm mt-2 leading-relaxed">{auction.description}</p>
-            )}
-          </div>
+      {/* 商品图（顶部全宽） */}
+      {auction.image_url && (
+        <img
+          src={auction.image_url}
+          alt={auction.title}
+          className="w-full mt-3 h-48 object-cover bg-[#F2F2F7]"
+          onError={(e) => {
+            ;(e.currentTarget as HTMLImageElement).style.display = 'none'
+          }}
+        />
+      )}
+
+      {/* 商品标题 */}
+      <div className="px-5 pt-4 pb-2">
+        <div className="flex items-start justify-between gap-3 mb-1">
+          <h1 className="ios-large-title text-2xl">{auction.title}</h1>
           <StatusBadge status={auction.status} />
         </div>
-        {auction.image_url && (
-          <img
-            src={auction.image_url}
-            alt={auction.title}
-            className="w-full mt-3 rounded-2xl max-h-60 object-cover"
-            onError={(e) => {
-              ;(e.currentTarget as HTMLImageElement).style.display = 'none'
-            }}
-          />
+        {auction.description && (
+          <p className="text-sm text-[#8E8E93] leading-relaxed mt-1">{auction.description}</p>
         )}
       </div>
 
-      {/* 当前价 / 倒计时 / 出价人数 */}
-      <div className="card mt-3 p-6 text-center fade-up">
-        <p className="text-xs text-ink-500 font-medium tracking-wide">当前最高价</p>
-        <p
-          className={`text-6xl font-bold text-accent-600 my-2 inline-block px-3 ${
-            priceFlash ? 'flash' : ''
-          }`}
-        >
-          ¥{auction.current_price}
-        </p>
-        <div className="grid grid-cols-2 gap-3 mt-4">
-          <div className="bg-app-50 rounded-2xl py-2">
-            <div className="text-[11px] text-ink-500 mb-0.5">⏱ 倒计时</div>
-            <div className="text-base">
-              <Countdown endsAt={auction.ends_at} stopped={auction.status !== 'active'} />
+      {/* 当前价 - 大字突出 */}
+      <div className="px-4 mt-2">
+        <div className="bg-white rounded-2xl px-5 py-6 text-center">
+          <p className="text-xs text-[#8E8E93] font-medium tracking-wide">当前最高价</p>
+          <p
+            className={`text-5xl font-bold text-[#FF9500] my-2 inline-block px-3 ${
+              priceFlash ? 'flash' : ''
+            }`}
+          >
+            ¥{auction.current_price}
+          </p>
+          <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-[#F2F2F7]">
+            <div>
+              <div className="text-[11px] text-[#8E8E93] mb-0.5">倒计时</div>
+              <div className="text-base">
+                <Countdown endsAt={auction.ends_at} stopped={auction.status !== 'active'} />
+              </div>
             </div>
-          </div>
-          <div className="bg-app-50 rounded-2xl py-2">
-            <div className="text-[11px] text-ink-500 mb-0.5">👥 出价人数</div>
-            <div className="text-base font-bold">{bidCount}</div>
+            <div>
+              <div className="text-[11px] text-[#8E8E93] mb-0.5">出价人数</div>
+              <div className="text-base font-bold">{bidCount}</div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* 排行榜 */}
-      <div className="card mt-3 p-4 fade-up">
-        <h3 className="font-semibold mb-3 flex items-center gap-1.5">
-          <span>🏆</span>
-          <span>出价排行</span>
-          <span className="text-xs text-ink-400 font-normal">Top 5</span>
-        </h3>
-        {topBids.length === 0 ? (
-          <div className="text-center text-ink-400 py-6 text-sm">还没有人出价</div>
-        ) : (
-          <ol className="space-y-2">
-            {topBids.map((b, i) => (
-              <li
-                key={`${b.user_id}-${b.amount}-${i}`}
-                className={`flex items-center justify-between px-3 py-2.5 rounded-2xl ${
+      {/* 排行榜 - iOS list 风格 */}
+      <div className="ios-section-header mt-5">
+        <span>出价排行</span>
+        <span className="text-[#8E8E93]">TOP 5</span>
+      </div>
+      {topBids.length === 0 ? (
+        <div className="ios-list">
+          <div className="ios-list-item no-icon text-[#8E8E93] justify-center" style={{ justifyContent: 'center' }}>
+            还没有人出价
+          </div>
+        </div>
+      ) : (
+        <div className="ios-list">
+          {topBids.map((b, i) => (
+            <div key={`${b.user_id}-${b.amount}-${i}`} className="ios-list-item">
+              <span
+                className={`w-7 h-7 inline-flex items-center justify-center rounded-full text-xs font-bold shrink-0 ${
                   i === 0
-                    ? 'bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200'
-                    : 'bg-app-50'
+                    ? 'bg-[#FF9500] text-white'
+                    : 'bg-[#F2F2F7] text-[#8E8E93]'
                 }`}
               >
-                <span className="flex items-center gap-2.5">
-                  <span
-                    className={`w-7 h-7 inline-flex items-center justify-center rounded-full text-xs font-bold ${
-                      i === 0
-                        ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white'
-                        : 'bg-white text-ink-500 border border-app-200'
-                    }`}
-                  >
-                    {i + 1}
-                  </span>
-                  <span className="text-sm">
-                    UID {b.user_id}
-                    {b.user_id === uid && (
-                      <span className="ml-1 text-xs text-accent-600 font-medium">(你)</span>
-                    )}
-                  </span>
-                </span>
-                <span
-                  className={`font-bold ${i === 0 ? 'text-accent-600 text-lg' : 'text-ink-700'}`}
-                >
-                  ¥{b.amount}
-                </span>
-              </li>
-            ))}
-          </ol>
-        )}
-      </div>
+                {i + 1}
+              </span>
+              <span className="flex-1 text-[15px]">
+                UID {b.user_id}
+                {b.user_id === uid && (
+                  <span className="ml-1 text-xs text-[#FF9500] font-medium">(你)</span>
+                )}
+              </span>
+              <span
+                className={`font-semibold ${i === 0 ? 'text-[#FF9500] text-lg' : 'text-[#3C3C43]'}`}
+              >
+                ¥{b.amount}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* 出价区（固定底部） */}
       {auction.status === 'active' && (
-        <div className="fixed bottom-3 left-0 right-0 px-4 max-w-md mx-auto z-30">
-          <div className="glass rounded-3xl p-3">
-            <div className="flex items-center justify-between mb-2 text-[11px] text-ink-500 px-1">
+        <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto z-30">
+          <div className="glass px-4 pt-3 pb-5">
+            <div className="flex items-center justify-between mb-2 text-[11px] text-[#8E8E93] px-1">
               <span>
                 最低出价 = ¥{auction.current_price} + ¥{auction.price_step}
               </span>
               {auction.ceiling_price && (
-                <span className="text-amber-600">封顶 ¥{auction.ceiling_price}</span>
+                <span className="text-[#FF9500] font-medium">封顶 ¥{auction.ceiling_price}</span>
               )}
             </div>
             <button
@@ -314,8 +310,8 @@ export function AuctionDetail() {
         </div>
       )}
       {auction.status === 'pending' && (
-        <div className="fixed bottom-3 left-0 right-0 px-4 max-w-md mx-auto z-30">
-          <div className="card p-4 text-center text-ink-500 text-sm">竞拍尚未开始</div>
+        <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto z-30">
+          <div className="glass px-4 py-5 text-center text-[#8E8E93] text-sm">竞拍尚未开始</div>
         </div>
       )}
     </div>
