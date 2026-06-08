@@ -4,11 +4,28 @@ import { api } from '../api/client'
 import { getUser, isLoggedIn } from '../lib/auth'
 import { AuctionWS } from '../lib/ws'
 import type { Auction, Bid, TopBid, WSMessage } from '../lib/types'
-import { Countdown } from '../components/Countdown'
-import { StatusBadge } from '../components/StatusBadge'
 
-type Banner = { kind: 'success' | 'warn' | 'info'; text: string } | null
+// 占位视频（横屏 mp4，object-fit:cover 后竖屏铺满）。
+// 后续替换为真实商品展示视频即可。
+const PLACEHOLDER_VIDEO =
+  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
+
+type Toast = { kind: 'win' | 'lose' | 'info'; text: string; id: number } | null
 type FinishedInfo = { final_price: number; winner_id: number | null } | null
+
+// 假评论池 —— 让直播间感觉有人在
+const FAKE_COMMENTS = [
+  '666',
+  '主播看看这个',
+  '我先收藏了',
+  '价格还能再降吗',
+  '冲！',
+  '蹲一个',
+  '👏👏👏',
+  '太便宜了吧',
+  '上车',
+  '老粉了',
+]
 
 export function AuctionDetail() {
   const { id } = useParams<{ id: string }>()
@@ -21,14 +38,17 @@ export function AuctionDetail() {
   const [topBids, setTopBids] = useState<TopBid[]>([])
   const [bidCount, setBidCount] = useState(0)
   const [submitting, setSubmitting] = useState(false)
-  const [banner, setBanner] = useState<Banner>(null)
-  const [priceFlash, setPriceFlash] = useState(false)
+  const [priceFlashKey, setPriceFlashKey] = useState(0)
+  const [toast, setToast] = useState<Toast>(null)
   const [finished, setFinished] = useState<FinishedInfo>(null)
   const [cancelled, setCancelled] = useState(false)
-  const [wsStatus, setWsStatus] = useState<'open' | 'closed' | 'reconnecting'>('reconnecting')
+  const [secLeft, setSecLeft] = useState(0)
+  const [comments, setComments] = useState<string[]>([])
 
   const hasBidRef = useRef(false)
+  const toastIdRef = useRef(0)
 
+  // 初始拉数据
   useEffect(() => {
     api.get<{ data: Auction }>(`/auctions/${auctionId}`).then((r) => {
       setAuction(r.data.data)
@@ -49,22 +69,53 @@ export function AuctionDetail() {
     })
   }, [auctionId, uid])
 
+  // WebSocket
   useEffect(() => {
     if (!auctionId) return
-    const ws = new AuctionWS(
-      auctionId,
-      (msg: WSMessage) => handleMessage(msg),
-      (s) => setWsStatus(s),
-    )
+    const ws = new AuctionWS(auctionId, (msg: WSMessage) => handleMessage(msg))
     ws.connect()
     return () => ws.close()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auctionId])
 
+  // 倒计时
+  useEffect(() => {
+    if (!auction?.ends_at || auction.status !== 'active') {
+      setSecLeft(0)
+      return
+    }
+    const tick = () => {
+      const remain = Math.max(
+        0,
+        Math.floor((new Date(auction.ends_at!).getTime() - Date.now()) / 1000),
+      )
+      setSecLeft(remain)
+    }
+    tick()
+    const t = setInterval(tick, 1000)
+    return () => clearInterval(t)
+  }, [auction?.ends_at, auction?.status])
+
+  // toast 自动消失
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 2000)
+    return () => clearTimeout(t)
+  }, [toast])
+
+  // 弹幕轮播（每 2.5s 加一条）
+  useEffect(() => {
+    if (auction?.status !== 'active') return
+    const t = setInterval(() => {
+      const c = FAKE_COMMENTS[Math.floor(Math.random() * FAKE_COMMENTS.length)]
+      setComments((prev) => [...prev.slice(-3), `游客${Math.floor(Math.random() * 9000 + 1000)}: ${c}`])
+    }, 2500)
+    return () => clearInterval(t)
+  }, [auction?.status])
+
   const handleMessage = (msg: WSMessage) => {
     if (msg.type === 'auction_started') {
       setAuction((p) => (p ? { ...p, status: 'active', ends_at: msg.ends_at } : p))
-      setBanner({ kind: 'info', text: '🚀 竞拍已开始！' })
     } else if (msg.type === 'new_bid') {
       setAuction((p) =>
         p
@@ -78,13 +129,12 @@ export function AuctionDetail() {
       )
       setTopBids(msg.top_bids.slice(0, 5))
       setBidCount((c) => c + 1)
-      setPriceFlash(true)
-      setTimeout(() => setPriceFlash(false), 600)
+      setPriceFlashKey((k) => k + 1)
 
       if (msg.winner_id === uid) {
-        setBanner({ kind: 'success', text: '✨ 你正在领先！' })
+        pushToast('win', '✨ 你正在领先')
       } else if (hasBidRef.current) {
-        setBanner({ kind: 'warn', text: '⚠️ 你被超越了！' })
+        pushToast('lose', '⚠️ 你被超越了')
       }
     } else if (msg.type === 'auction_finished') {
       setFinished({ final_price: msg.final_price, winner_id: msg.winner_id })
@@ -95,10 +145,18 @@ export function AuctionDetail() {
     }
   }
 
+  const pushToast = (kind: NonNullable<Toast>['kind'], text: string) => {
+    toastIdRef.current += 1
+    setToast({ kind, text, id: toastIdRef.current })
+  }
+
   const nextBidAmount = useMemo(
     () => (auction ? auction.current_price + auction.price_step : 0),
     [auction],
   )
+
+  // 假在线人数（确定性，基于 auctionId）
+  const viewers = useMemo(() => ((auctionId * 137) % 800) + 120 + bidCount * 3, [auctionId, bidCount])
 
   const handleBid = async () => {
     if (!auction) return
@@ -121,223 +179,257 @@ export function AuctionDetail() {
 
   if (!auction) {
     return (
-      <div className="min-h-screen max-w-md mx-auto p-4">
-        <div className="card p-12 text-center text-ink-400 mt-12">加载中...</div>
-      </div>
-    )
-  }
-
-  if (cancelled) {
-    return <CenterMessage emoji="🚫" title="该竞拍已取消" linkBack />
-  }
-
-  if (finished) {
-    const isWinner = finished.winner_id === uid
-    return (
-      <div className="min-h-screen max-w-md mx-auto px-4 py-6">
-        <div className="text-center pt-10 pb-6">
-          <div className="text-7xl mb-3">{isWinner ? '🏆' : '🔨'}</div>
-          <h1 className="ios-large-title text-2xl mb-1">竞拍结束</h1>
-          <p className="text-[#8E8E93] text-sm">{auction.title}</p>
-        </div>
-        <div className="bg-white rounded-2xl p-7 text-center mb-4">
-          <p className="text-xs text-[#8E8E93] mb-1">成交价</p>
-          <p className="text-5xl font-bold text-[#FF9500] my-2">¥{finished.final_price}</p>
-          <p className="text-xs text-[#8E8E93] mt-2">
-            得主：UID {finished.winner_id ?? '无人出价'}
-            {isWinner && <span className="ml-1 text-[#FF9500] font-medium">(你)</span>}
-          </p>
-        </div>
-        {isWinner && (
-          <>
-            <div className="text-center text-[#FF9500] font-medium mb-3">
-              🎉 恭喜你拍得此商品！
-            </div>
-            <button
-              onClick={() => navigate(`/auction/${auctionId}/order`)}
-              className="btn-accent w-full py-3.5 rounded-2xl text-base"
-            >
-              查看订单
-            </button>
-          </>
-        )}
-        <Link to="/" className="block text-center text-[#FF9500] text-sm mt-6">
-          返回大厅
-        </Link>
+      <div className="live-room flex items-center justify-center">
+        <div className="text-white/70 text-sm">直播间加载中...</div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen max-w-md mx-auto pb-32">
-      {/* 顶部 banner */}
-      {banner && (
-        <div className="px-4 mt-3">
-          <div
-            className={`rounded-xl px-4 py-2.5 text-center text-sm font-medium ${
-              banner.kind === 'success'
-                ? 'bg-[#34C75933] text-[#1F7A2B]'
-                : banner.kind === 'warn'
-                ? 'bg-[#FF950033] text-[#9B5C00]'
-                : 'bg-[#5AC8FA33] text-[#0E5E80]'
-            }`}
-          >
-            {banner.text}
+    <div className="live-room">
+      {/* 视频底层 */}
+      <video
+        src={PLACEHOLDER_VIDEO}
+        className="live-video"
+        autoPlay
+        loop
+        muted
+        playsInline
+        poster={`https://picsum.photos/seed/${auctionId}/720/1280`}
+      />
+
+      {/* 渐变遮罩 */}
+      <div className="live-overlay-top" />
+      <div className="live-overlay-bottom" />
+
+      {/* 顶部：主播 + 关注 */}
+      <div className="absolute top-3 left-3 right-3 z-10 flex items-center gap-2">
+        <div
+          className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0 ring-2 ring-white/30"
+          style={{ background: 'linear-gradient(135deg, #FE2C55, #FF6B85)' }}
+        >
+          {auction.title.slice(0, 1).toUpperCase()}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-white text-sm font-semibold truncate" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}>
+              {auction.title}的直播间
+            </span>
+            <span className="px-1.5 py-0.5 bg-[#FE2C55] text-[9px] rounded font-bold text-white tracking-wider">
+              LIVE
+            </span>
+          </div>
+          <div className="text-white/85 text-[11px] mt-0.5 flex items-center gap-2" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}>
+            <span>👥 {viewers} 人在看</span>
+          </div>
+        </div>
+        <button className="px-3.5 py-1.5 bg-[#FE2C55] text-white text-xs font-semibold rounded-full shadow-lg shrink-0">
+          + 关注
+        </button>
+      </div>
+
+      {/* 倒计时 */}
+      {auction.status === 'active' && secLeft > 0 && (
+        <div className="absolute top-[60px] left-3 z-10">
+          <span className={`countdown-pill ${secLeft < 10 ? 'urgent' : ''}`}>
+            <span className="dot" />
+            <span>距结束 {fmtTime(secLeft)}</span>
+          </span>
+        </div>
+      )}
+
+      {/* 排行榜 */}
+      {topBids.length > 0 && (
+        <div className="absolute right-3 top-[120px] z-10 w-36 live-glass p-2.5">
+          <div className="text-[11px] text-white/75 mb-1.5 px-1 flex items-center gap-1 font-medium">
+            <span>🏆</span>
+            <span>出价榜</span>
+          </div>
+          <div className="space-y-1.5">
+            {topBids.slice(0, 5).map((b, i) => (
+              <div
+                key={`${b.user_id}-${b.amount}-${i}`}
+                className="flex items-center gap-1.5 text-xs"
+              >
+                <span
+                  className={`w-4 h-4 inline-flex items-center justify-center rounded-full text-[10px] font-bold shrink-0 ${
+                    i === 0
+                      ? 'bg-gradient-to-br from-[#FFE76A] to-[#FFB627] text-black shadow'
+                      : 'bg-white/20 text-white'
+                  }`}
+                >
+                  {i + 1}
+                </span>
+                <span className="truncate flex-1 text-white/90">
+                  UID {b.user_id}
+                  {b.user_id === uid && <span className="text-[#FFD451] ml-0.5">·你</span>}
+                </span>
+                <span className={`font-bold ${i === 0 ? 'text-[#FFD451]' : 'text-white'}`}>
+                  ¥{b.amount}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* WS 状态条 */}
-      {wsStatus !== 'open' && (
-        <div className="text-center text-xs text-[#8E8E93] py-1.5 mt-2">
-          {wsStatus === 'reconnecting' ? '🔄 正在连接实时通道...' : '⚠️ 实时通道已断开'}
-        </div>
-      )}
-
-      {/* 商品图（顶部全宽） */}
-      {auction.image_url && (
-        <img
-          src={auction.image_url}
-          alt={auction.title}
-          className="w-full mt-3 h-48 object-cover bg-[#F2F2F7]"
-          onError={(e) => {
-            ;(e.currentTarget as HTMLImageElement).style.display = 'none'
-          }}
-        />
-      )}
-
-      {/* 商品标题 */}
-      <div className="px-5 pt-4 pb-2">
-        <div className="flex items-start justify-between gap-3 mb-1">
-          <h1 className="ios-large-title text-2xl">{auction.title}</h1>
-          <StatusBadge status={auction.status} />
-        </div>
-        {auction.description && (
-          <p className="text-sm text-[#8E8E93] leading-relaxed mt-1">{auction.description}</p>
-        )}
+      {/* 弹幕（左下，商品卡上方） */}
+      <div className="absolute bottom-[170px] left-3 right-32 z-10 pointer-events-none flex flex-col items-start">
+        {comments.slice(-3).map((c, i) => (
+          <div key={`${c}-${i}`} className="comment-bubble fade-up">
+            {c}
+          </div>
+        ))}
       </div>
 
-      {/* 当前价 - 大字突出 */}
-      <div className="px-4 mt-2">
-        <div className="bg-white rounded-2xl px-5 py-6 text-center">
-          <p className="text-xs text-[#8E8E93] font-medium tracking-wide">当前最高价</p>
-          <p
-            className={`text-5xl font-bold text-[#FF9500] my-2 inline-block px-3 ${
-              priceFlash ? 'flash' : ''
-            }`}
-          >
-            ¥{auction.current_price}
-          </p>
-          <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-[#F2F2F7]">
+      {/* 商品信息卡 */}
+      <div className="absolute left-3 right-3 bottom-[76px] z-10">
+        <div className="live-glass p-3.5">
+          <div className="text-white text-sm font-semibold mb-1 truncate" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}>
+            {auction.title}
+          </div>
+          {auction.description && (
+            <div className="text-white/75 text-xs mb-2 line-clamp-2">
+              {auction.description}
+            </div>
+          )}
+          <div className="flex items-baseline justify-between mt-1">
             <div>
-              <div className="text-[11px] text-[#8E8E93] mb-0.5">倒计时</div>
-              <div className="text-base">
-                <Countdown endsAt={auction.ends_at} stopped={auction.status !== 'active'} />
+              <div className="text-white/70 text-[10px] tracking-wide">当前最高价</div>
+              <div
+                key={priceFlashKey}
+                className="text-3xl font-bold text-[#FFD451] price-pop"
+                style={{ textShadow: '0 2px 8px rgba(0,0,0,0.6)' }}
+              >
+                ¥{auction.current_price}
               </div>
             </div>
-            <div>
-              <div className="text-[11px] text-[#8E8E93] mb-0.5">出价人数</div>
-              <div className="text-base font-bold">{bidCount}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 排行榜 - iOS list 风格 */}
-      <div className="ios-section-header mt-5">
-        <span>出价排行</span>
-        <span className="text-[#8E8E93]">TOP 5</span>
-      </div>
-      {topBids.length === 0 ? (
-        <div className="ios-list">
-          <div className="ios-list-item no-icon text-[#8E8E93] justify-center" style={{ justifyContent: 'center' }}>
-            还没有人出价
-          </div>
-        </div>
-      ) : (
-        <div className="ios-list">
-          {topBids.map((b, i) => (
-            <div key={`${b.user_id}-${b.amount}-${i}`} className="ios-list-item">
-              <span
-                className={`w-7 h-7 inline-flex items-center justify-center rounded-full text-xs font-bold shrink-0 ${
-                  i === 0
-                    ? 'bg-[#FF9500] text-white'
-                    : 'bg-[#F2F2F7] text-[#8E8E93]'
-                }`}
-              >
-                {i + 1}
-              </span>
-              <span className="flex-1 text-[15px]">
-                UID {b.user_id}
-                {b.user_id === uid && (
-                  <span className="ml-1 text-xs text-[#FF9500] font-medium">(你)</span>
-                )}
-              </span>
-              <span
-                className={`font-semibold ${i === 0 ? 'text-[#FF9500] text-lg' : 'text-[#3C3C43]'}`}
-              >
-                ¥{b.amount}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* 出价区（固定底部） */}
-      {auction.status === 'active' && (
-        <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto z-30">
-          <div className="glass px-4 pt-3 pb-5">
-            <div className="flex items-center justify-between mb-2 text-[11px] text-[#8E8E93] px-1">
-              <span>
-                最低出价 = ¥{auction.current_price} + ¥{auction.price_step}
-              </span>
+            <div className="text-right text-[11px] text-white/75">
+              <div>{bidCount} 次出价</div>
               {auction.ceiling_price && (
-                <span className="text-[#FF9500] font-medium">封顶 ¥{auction.ceiling_price}</span>
+                <div className="text-[#FFD451]">封顶 ¥{auction.ceiling_price}</div>
               )}
             </div>
-            <button
-              onClick={handleBid}
-              disabled={submitting}
-              className="btn-accent w-full py-3.5 rounded-2xl text-base"
-            >
-              {submitting
-                ? '出价中...'
-                : isLoggedIn()
-                ? `立即出价 ¥${nextBidAmount}`
-                : `登录后出价 ¥${nextBidAmount}`}
-            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 底部出价栏 */}
+      {auction.status === 'active' && (
+        <div className="absolute left-0 right-0 bottom-0 z-10 px-3 pt-2 flex items-center gap-2" style={{ paddingBottom: 'calc(12px + env(safe-area-inset-bottom))' }}>
+          <div className="flex-1 h-9 bg-white/15 backdrop-blur rounded-full px-4 text-white/60 text-xs flex items-center" style={{ border: '1px solid rgba(255,255,255,0.15)' }}>
+            说点什么...
+          </div>
+          <button
+            onClick={handleBid}
+            disabled={submitting}
+            className="btn-douyin h-9 px-4 rounded-full text-sm whitespace-nowrap"
+          >
+            {submitting
+              ? '出价中...'
+              : isLoggedIn()
+              ? `出价 ¥${nextBidAmount}`
+              : `登录出价`}
+          </button>
+        </div>
+      )}
+      {auction.status === 'pending' && !finished && !cancelled && (
+        <div className="absolute left-0 right-0 bottom-0 z-10 px-3 pb-5 pt-2 text-center text-white/80 text-sm bg-black/40 backdrop-blur">
+          竞拍尚未开始，敬请期待
+        </div>
+      )}
+
+      {/* 中央 Toast */}
+      {toast && (
+        <div key={toast.id} className="center-toast">
+          <div
+            className="px-7 py-4 rounded-2xl text-lg font-bold shadow-2xl text-white whitespace-nowrap"
+            style={{
+              background:
+                toast.kind === 'win'
+                  ? 'linear-gradient(135deg, #34C759, #28A745)'
+                  : toast.kind === 'lose'
+                  ? 'linear-gradient(135deg, #FE2C55, #FF6B85)'
+                  : 'linear-gradient(135deg, #5AC8FA, #007AFF)',
+              boxShadow: '0 10px 40px rgba(0,0,0,0.5)',
+            }}
+          >
+            {toast.text}
           </div>
         </div>
       )}
-      {auction.status === 'pending' && (
-        <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto z-30">
-          <div className="glass px-4 py-5 text-center text-[#8E8E93] text-sm">竞拍尚未开始</div>
-        </div>
+
+      {/* 结束盖层 */}
+      {finished && (
+        <FullScreenEnd
+          emoji={finished.winner_id === uid ? '🏆' : '🔨'}
+          title="竞拍结束"
+          subtitle={auction.title}
+        >
+          <div className="text-sm text-white/70 mb-1">成交价</div>
+          <div className="text-5xl font-bold text-[#FFD451] mb-4">¥{finished.final_price}</div>
+          <div className="text-sm text-white/70 mb-6">
+            得主：UID {finished.winner_id ?? '无人出价'}
+            {finished.winner_id === uid && (
+              <span className="text-[#FFD451] ml-1 font-semibold">(你)</span>
+            )}
+          </div>
+          {finished.winner_id === uid && (
+            <button
+              onClick={() => navigate(`/auction/${auctionId}/order`)}
+              className="btn-douyin px-8 py-3 rounded-full font-bold text-base"
+            >
+              查看订单
+            </button>
+          )}
+          <Link to="/" className="mt-6 text-white/70 text-sm">
+            返回大厅
+          </Link>
+        </FullScreenEnd>
+      )}
+
+      {/* 取消盖层 */}
+      {cancelled && !finished && (
+        <FullScreenEnd emoji="🚫" title="该竞拍已取消" subtitle={auction.title}>
+          <Link to="/" className="mt-6 text-white/70 text-sm">
+            返回大厅
+          </Link>
+        </FullScreenEnd>
       )}
     </div>
   )
 }
 
-function CenterMessage({
+function FullScreenEnd({
   emoji,
   title,
-  linkBack,
+  subtitle,
+  children,
 }: {
   emoji: string
   title: string
-  linkBack?: boolean
+  subtitle?: string
+  children?: React.ReactNode
 }) {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center max-w-md mx-auto p-8 text-center">
-      <div className="card px-10 py-12">
-        <div className="text-7xl mb-4">{emoji}</div>
-        <h1 className="text-xl font-bold mb-2">{title}</h1>
-      </div>
-      {linkBack && (
-        <Link to="/" className="mt-6 text-ink-400 text-sm hover:text-ink-700">
-          ← 返回大厅
-        </Link>
-      )}
+    <div
+      className="absolute inset-0 z-30 flex flex-col items-center justify-center p-8 text-center"
+      style={{
+        background:
+          'linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(20,20,30,0.92) 100%)',
+        backdropFilter: 'blur(12px)',
+      }}
+    >
+      <div className="text-7xl mb-3">{emoji}</div>
+      <div className="text-2xl font-bold text-white mb-1">{title}</div>
+      {subtitle && <div className="text-sm text-white/60 mb-6">{subtitle}</div>}
+      {children}
     </div>
   )
+}
+
+function fmtTime(secs: number): string {
+  const m = Math.floor(secs / 60)
+  const s = secs % 60
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
