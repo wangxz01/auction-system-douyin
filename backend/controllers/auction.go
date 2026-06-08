@@ -16,6 +16,7 @@ type createAuctionReq struct {
 	Title           string   `json:"title"`
 	Description     string   `json:"description"`
 	ImageURL        string   `json:"image_url"`
+	StreamURL       string   `json:"stream_url"`
 	StartPrice      float64  `json:"start_price"`
 	PriceStep       float64  `json:"price_step"`
 	CeilingPrice    *float64 `json:"ceiling_price"`
@@ -49,6 +50,7 @@ func CreateAuction(c *gin.Context) {
 		Title:           req.Title,
 		Description:     req.Description,
 		ImageURL:        req.ImageURL,
+		StreamURL:       req.StreamURL,
 		StartPrice:      req.StartPrice,
 		PriceStep:       req.PriceStep,
 		CeilingPrice:    req.CeilingPrice,

@@ -8,6 +8,7 @@ export function AdminCreate() {
     title: '',
     description: '',
     image_url: '',
+    stream_url: '',
     start_price: 0,
     price_step: 10,
     ceiling_price: '',
@@ -27,6 +28,7 @@ export function AdminCreate() {
         title: form.title,
         description: form.description,
         image_url: form.image_url,
+        stream_url: form.stream_url,
         start_price: Number(form.start_price),
         price_step: Number(form.price_step),
         duration_seconds: Number(form.duration_seconds),
@@ -75,6 +77,23 @@ export function AdminCreate() {
             placeholder="https://..."
             type="url"
           />
+        </div>
+
+        {/* 直播配置 */}
+        <div className="ios-section-header mt-6" style={{ padding: '0 4px 8px' }}>
+          直播
+        </div>
+        <div className="ios-list ios-list-flush">
+          <RowInput
+            label="推流地址"
+            value={form.stream_url}
+            onChange={(v) => update('stream_url', v)}
+            placeholder="留空 = 使用默认演示视频"
+            type="url"
+          />
+        </div>
+        <div className="text-[11px] text-[#8E8E93] mt-1.5 px-1">
+          填写 HLS 播放地址（.m3u8），留空则使用默认演示视频
         </div>
 
         {/* 价格规则 */}

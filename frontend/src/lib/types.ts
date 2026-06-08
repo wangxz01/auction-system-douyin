@@ -5,6 +5,7 @@ export interface Auction {
   title: string
   description: string
   image_url: string
+  stream_url: string
   start_price: number
   price_step: number
   ceiling_price: number | null

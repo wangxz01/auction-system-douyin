@@ -7,6 +7,7 @@ type Auction struct {
 	Title           string     `gorm:"size:255;not null" json:"title"`
 	Description     string     `gorm:"type:text" json:"description"`
 	ImageURL        string     `gorm:"size:512" json:"image_url"`
+	StreamURL       string     `gorm:"size:500" json:"stream_url"`
 	StartPrice      float64    `gorm:"type:decimal(12,2);not null" json:"start_price"`
 	PriceStep       float64    `gorm:"type:decimal(12,2);not null" json:"price_step"`
 	CeilingPrice    *float64   `gorm:"type:decimal(12,2)" json:"ceiling_price"`

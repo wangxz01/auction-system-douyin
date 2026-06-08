@@ -125,6 +125,11 @@ export function AdminAuctionDetail() {
         <div className="ios-list ios-list-flush">
           <Row label="名称" value={auction.title} />
           <Row label="图片 URL" value={auction.image_url || '—'} mono />
+          <Row
+            label="推流地址"
+            value={auction.stream_url || '— (使用默认演示视频)'}
+            mono
+          />
           {auction.description && <Row label="描述" value={auction.description} multiline />}
         </div>
       </div>

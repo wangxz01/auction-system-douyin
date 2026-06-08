@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import Hls from 'hls.js'
 import { api } from '../api/client'
 import { getUser, isLoggedIn } from '../lib/auth'
 import { AuctionWS } from '../lib/ws'
 import type { Auction, Bid, TopBid, WSMessage } from '../lib/types'
 
-// 占位视频（横屏 mp4，object-fit:cover 后竖屏铺满）。
-// 后续替换为真实商品展示视频即可。
-const PLACEHOLDER_VIDEO =
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
+// 兜底本地视频（放在 public/ 下，可被 / 直接访问）
+const FALLBACK_VIDEO = '/live.mp4'
 
 type Toast = { kind: 'win' | 'lose' | 'info'; text: string; id: number } | null
 type FinishedInfo = { final_price: number; winner_id: number | null } | null
@@ -47,6 +46,67 @@ export function AuctionDetail() {
 
   const hasBidRef = useRef(false)
   const toastIdRef = useRef(0)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [videoLoading, setVideoLoading] = useState(true)
+  const [usingFallback, setUsingFallback] = useState(false)
+
+  // 视频源加载策略：HLS → 原生 HLS → 兜底本地
+  useEffect(() => {
+    if (!auction) return
+    const video = videoRef.current
+    if (!video) return
+
+    setVideoLoading(true)
+    setUsingFallback(false)
+    let hls: Hls | null = null
+    let cancelled = false
+
+    const playFallback = () => {
+      if (cancelled) return
+      setUsingFallback(true)
+      video.src = FALLBACK_VIDEO
+      video.load()
+      void video.play().catch(() => {})
+    }
+
+    const onPlaying = () => setVideoLoading(false)
+    video.addEventListener('playing', onPlaying)
+
+    const url = auction.stream_url?.trim() || ''
+    if (!url) {
+      playFallback()
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Safari / iOS 原生 HLS
+      video.src = url
+      const onErr = () => playFallback()
+      video.addEventListener('error', onErr, { once: true })
+      void video.play().catch(() => {})
+    } else if (Hls.isSupported()) {
+      hls = new Hls({ enableWorker: true })
+      hls.loadSource(url)
+      hls.attachMedia(video)
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        if (cancelled) return
+        void video.play().catch(() => {})
+      })
+      hls.on(Hls.Events.ERROR, (_, data) => {
+        if (data.fatal) {
+          hls?.destroy()
+          hls = null
+          playFallback()
+        }
+      })
+    } else {
+      // 浏览器既不支持 hls.js 也不支持原生 HLS
+      playFallback()
+    }
+
+    return () => {
+      cancelled = true
+      video.removeEventListener('playing', onPlaying)
+      if (hls) hls.destroy()
+    }
+  }, [auction?.stream_url, auction])
 
   // 初始拉数据
   useEffect(() => {
@@ -187,9 +247,9 @@ export function AuctionDetail() {
 
   return (
     <div className="live-room">
-      {/* 视频底层 */}
+      {/* 视频底层（src 由 useEffect 根据 stream_url 设置） */}
       <video
-        src={PLACEHOLDER_VIDEO}
+        ref={videoRef}
         className="live-video"
         autoPlay
         loop
@@ -197,6 +257,24 @@ export function AuctionDetail() {
         playsInline
         poster={`https://picsum.photos/seed/${auctionId}/720/1280`}
       />
+
+      {/* 加载提示 */}
+      {videoLoading && (
+        <div className="absolute inset-0 z-[2] flex items-center justify-center pointer-events-none">
+          <div className="bg-black/60 rounded-full px-4 py-2 text-white/90 text-xs backdrop-blur">
+            正在加载直播流...
+          </div>
+        </div>
+      )}
+
+      {/* 兜底视频提示（仅当原始 stream_url 加载失败时显示一次） */}
+      {usingFallback && auction.stream_url && !videoLoading && (
+        <div className="absolute top-2 right-2 z-[5]">
+          <div className="bg-black/55 text-white/80 text-[10px] rounded-full px-2 py-0.5 backdrop-blur">
+            演示视频
+          </div>
+        </div>
+      )}
 
       {/* 渐变遮罩 */}
       <div className="live-overlay-top" />
