@@ -45,30 +45,20 @@ export function AdminCreate() {
   }
 
   return (
-    <div className="min-h-screen max-w-2xl mx-auto px-4 pb-12">
-      <header className="sticky top-3 z-10 mt-3">
-        <div className="glass rounded-3xl px-5 py-3 flex items-center justify-between">
-          <h1 className="text-lg font-bold tracking-tight">📦 发布新竞拍</h1>
-          <button
-            onClick={() => nav('/admin')}
-            className="btn-glass px-3 py-1.5 rounded-full text-xs"
-          >
-            ← 返回
-          </button>
-        </div>
-      </header>
+    <div className="max-w-2xl mx-auto px-8 py-8">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold tracking-tight">发布新竞拍</h1>
+        <p className="text-sm text-ink-500 mt-1">填写商品信息和竞拍规则</p>
+      </div>
 
-      <form
-        onSubmit={onSubmit}
-        className="glass-strong rounded-3xl p-6 mt-4 space-y-4 fade-up"
-      >
+      <form onSubmit={onSubmit} className="card p-6 space-y-4">
         <Field label="商品名称" required>
           <input
             type="text"
             value={form.title}
             onChange={onChange('title')}
             required
-            className="input-glass"
+            className="input-default"
           />
         </Field>
         <Field label="商品描述">
@@ -76,7 +66,7 @@ export function AdminCreate() {
             value={form.description}
             onChange={onChange('description')}
             rows={3}
-            className="input-glass resize-none"
+            className="input-default resize-none"
           />
         </Field>
         <Field label="图片 URL">
@@ -85,7 +75,7 @@ export function AdminCreate() {
             value={form.image_url}
             onChange={onChange('image_url')}
             placeholder="https://..."
-            className="input-glass"
+            className="input-default"
           />
         </Field>
         <div className="grid grid-cols-2 gap-4">
@@ -96,7 +86,7 @@ export function AdminCreate() {
               onChange={onChange('start_price')}
               min={0}
               step="0.01"
-              className="input-glass"
+              className="input-default"
             />
           </Field>
           <Field label="加价幅度 (¥)" required>
@@ -107,7 +97,7 @@ export function AdminCreate() {
               min={0.01}
               step="0.01"
               required
-              className="input-glass"
+              className="input-default"
             />
           </Field>
         </div>
@@ -120,7 +110,7 @@ export function AdminCreate() {
               min={0}
               step="0.01"
               placeholder="留空则无封顶"
-              className="input-glass"
+              className="input-default"
             />
           </Field>
           <Field label="竞拍时长 (秒)" required>
@@ -130,24 +120,33 @@ export function AdminCreate() {
               onChange={onChange('duration_seconds')}
               min={1}
               required
-              className="input-glass"
+              className="input-default"
             />
           </Field>
         </div>
 
         {error && (
-          <div className="text-rose-600 text-sm bg-rose-50/60 rounded-xl px-3 py-2 border border-rose-200/60">
+          <div className="text-rose-600 text-sm bg-rose-50 rounded-xl px-3 py-2 border border-rose-200">
             ⚠ {error}
           </div>
         )}
 
-        <button
-          type="submit"
-          disabled={submitting}
-          className="btn-accent w-full py-3.5 rounded-2xl text-base"
-        >
-          {submitting ? '提交中...' : '发布竞拍'}
-        </button>
+        <div className="flex gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => nav('/admin')}
+            className="btn-default flex-1 py-3 rounded-full text-sm"
+          >
+            取消
+          </button>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="btn-accent flex-1 py-3 rounded-full text-sm"
+          >
+            {submitting ? '提交中...' : '发布竞拍'}
+          </button>
+        </div>
       </form>
     </div>
   )

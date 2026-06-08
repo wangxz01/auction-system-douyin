@@ -22,12 +22,17 @@
 
 ### 🛠️ 商家端（管理后台 / PC 宽屏）
 
+固定的左侧导航栏（参考桌面 App 风格），右侧大块内容区。商家端**没有任何回跳用户端的入口**，与用户端完全隔离。
+
 | 路由 | 页面 | 说明 |
 |---|---|---|
-| <http://localhost:5173/admin> | 列表 | 全部竞拍 + 开始/取消（需登录） |
-| `/admin/create` | 发布 | 创建新竞拍（需登录） |
+| <http://localhost:5173/admin> | 竞拍管理 | 全部竞拍表格 + 行内开始/取消（需登录） |
+| `/admin/auctions/:id` | 商品详情 | 商家专属：商品信息 + 价格规则 + 出价历史 + 订单 + 开始/取消 |
+| `/admin/create` | 发布商品 | 创建新竞拍（需登录） |
 
-> 用户端页面按手机尺寸设计。桌面浏览器访问会自动套一个 iPhone 形状的边框（含灵动岛 + 状态栏），方便预览真机效果。窗口宽度 < 768px 时边框自动隐藏。
+左侧栏：🏷️ Logo · 📋 竞拍管理 · ➕ 发布商品 · 👤 当前账号 · ↩ 退出
+
+> 用户端页面按手机尺寸设计。桌面浏览器访问会自动套一个 iPhone 形状的边框（含灵动岛 + 状态栏），底部 Tab 栏锚定在手机屏幕内部，整体视觉就像一台真机摆在桌面上。窗口宽度 < 768px 时（真机访问或开发者工具切到移动模式）边框自动隐藏。
 
 ---
 
@@ -276,15 +281,18 @@ auction-system/
         │   ├── Countdown.tsx
         │   ├── RequireAuth.tsx    # 未登录跳 /login 的路由守卫
         │   ├── PhoneFrame.tsx     # 桌面端把用户端套进 iPhone 边框
-        │   └── BottomNav.tsx      # 底部 Tab：🏠 大厅 / 👤 我的
+        │   ├── BottomNav.tsx      # 用户端底部 Tab：🏠 大厅 / 👤 我的
+        │   ├── AdminLayout.tsx    # 商家端：左栏 + 内容区
+        │   └── AdminSidebar.tsx   # 商家端左侧导航
         └── pages/
-            ├── UserHall.tsx       # /         大厅
-            ├── Me.tsx             # /me       我的（含商家入口）
-            ├── Login.tsx          # /login    登录 / 注册
-            ├── AuctionDetail.tsx  # /auction/:id        实时详情
-            ├── OrderPage.tsx      # /auction/:id/order  订单
-            ├── AdminList.tsx      # /admin            商家列表
-            └── AdminCreate.tsx    # /admin/create     发布竞拍
+            ├── UserHall.tsx           # /         大厅（大标题 + pill 过滤 + 卡片）
+            ├── Me.tsx                 # /me       我的（含商家入口）
+            ├── Login.tsx              # /login    登录 / 注册
+            ├── AuctionDetail.tsx      # /auction/:id        用户端实时详情
+            ├── OrderPage.tsx          # /auction/:id/order  订单
+            ├── AdminList.tsx          # /admin              商家竞拍管理表格
+            ├── AdminAuctionDetail.tsx # /admin/auctions/:id 商家端商品详情
+            └── AdminCreate.tsx        # /admin/create       发布竞拍
 ```
 
 ---

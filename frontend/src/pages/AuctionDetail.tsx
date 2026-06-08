@@ -122,17 +122,13 @@ export function AuctionDetail() {
   if (!auction) {
     return (
       <div className="min-h-screen max-w-md mx-auto p-4">
-        <div className="glass rounded-2xl p-12 text-center text-ink-400 mt-12">
-          加载中...
-        </div>
+        <div className="card p-12 text-center text-ink-400 mt-12">加载中...</div>
       </div>
     )
   }
 
   if (cancelled) {
-    return (
-      <CenterMessage emoji="🚫" title="该竞拍已取消" linkBack />
-    )
+    return <CenterMessage emoji="🚫" title="该竞拍已取消" linkBack />
   }
 
   if (finished) {
@@ -144,11 +140,9 @@ export function AuctionDetail() {
           <h1 className="text-2xl font-bold mb-1">竞拍结束</h1>
           <p className="text-ink-500 text-sm">{auction.title}</p>
         </div>
-        <div className="glass-strong rounded-3xl p-7 text-center mb-4">
+        <div className="card p-7 text-center mb-4">
           <p className="text-xs text-ink-500 mb-1">成交价</p>
-          <p className="text-5xl font-bold text-accent-600 my-2">
-            ¥{finished.final_price}
-          </p>
+          <p className="text-5xl font-bold text-accent-600 my-2">¥{finished.final_price}</p>
           <p className="text-xs text-ink-500 mt-2">
             得主：UID {finished.winner_id ?? '无人出价'}
             {isWinner && <span className="ml-1 text-accent-600 font-medium">(你)</span>}
@@ -167,10 +161,7 @@ export function AuctionDetail() {
             </button>
           </>
         )}
-        <Link
-          to="/"
-          className="block text-center text-ink-400 text-sm mt-6 hover:text-ink-700"
-        >
+        <Link to="/" className="block text-center text-ink-400 text-sm mt-6 hover:text-ink-700">
           ← 返回大厅
         </Link>
       </div>
@@ -178,16 +169,16 @@ export function AuctionDetail() {
   }
 
   return (
-    <div className="min-h-screen max-w-md mx-auto px-4 pb-36">
+    <div className="min-h-screen max-w-md mx-auto px-4 pb-32">
       {/* 顶部 banner */}
       {banner && (
         <div
-          className={`mt-3 rounded-2xl px-4 py-2.5 text-center text-sm font-medium glass ${
+          className={`mt-3 rounded-2xl px-4 py-2.5 text-center text-sm font-medium border ${
             banner.kind === 'success'
-              ? '!bg-green-50/70 text-green-700'
+              ? 'bg-green-50 text-green-700 border-green-200'
               : banner.kind === 'warn'
-              ? '!bg-amber-50/70 text-amber-700'
-              : '!bg-blue-50/70 text-blue-700'
+              ? 'bg-amber-50 text-amber-700 border-amber-200'
+              : 'bg-blue-50 text-blue-700 border-blue-200'
           }`}
         >
           {banner.text}
@@ -196,20 +187,18 @@ export function AuctionDetail() {
 
       {/* WS 状态条 */}
       {wsStatus !== 'open' && (
-        <div className="mt-2 text-center text-xs text-ink-500 glass-soft rounded-full py-1.5">
+        <div className="mt-2 text-center text-xs text-ink-500 bg-app-100 rounded-full py-1.5">
           {wsStatus === 'reconnecting' ? '🔄 正在连接实时通道...' : '⚠️ 实时通道已断开'}
         </div>
       )}
 
       {/* 商品信息卡 */}
-      <div className="glass rounded-3xl mt-3 p-4 fade-up">
+      <div className="card mt-3 p-4 fade-up">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1">
             <h1 className="text-xl font-bold tracking-tight">{auction.title}</h1>
             {auction.description && (
-              <p className="text-ink-500 text-sm mt-2 leading-relaxed">
-                {auction.description}
-              </p>
+              <p className="text-ink-500 text-sm mt-2 leading-relaxed">{auction.description}</p>
             )}
           </div>
           <StatusBadge status={auction.status} />
@@ -227,23 +216,23 @@ export function AuctionDetail() {
       </div>
 
       {/* 当前价 / 倒计时 / 出价人数 */}
-      <div className="glass-warm rounded-3xl mt-3 p-6 text-center fade-up">
-        <p className="text-xs text-amber-800/70 font-medium tracking-wide">当前最高价</p>
+      <div className="card mt-3 p-6 text-center fade-up">
+        <p className="text-xs text-ink-500 font-medium tracking-wide">当前最高价</p>
         <p
-          className={`text-6xl font-bold text-accent-700 my-2 inline-block px-3 ${
+          className={`text-6xl font-bold text-accent-600 my-2 inline-block px-3 ${
             priceFlash ? 'flash' : ''
           }`}
         >
           ¥{auction.current_price}
         </p>
         <div className="grid grid-cols-2 gap-3 mt-4">
-          <div className="glass rounded-2xl py-2">
+          <div className="bg-app-50 rounded-2xl py-2">
             <div className="text-[11px] text-ink-500 mb-0.5">⏱ 倒计时</div>
             <div className="text-base">
               <Countdown endsAt={auction.ends_at} stopped={auction.status !== 'active'} />
             </div>
           </div>
-          <div className="glass rounded-2xl py-2">
+          <div className="bg-app-50 rounded-2xl py-2">
             <div className="text-[11px] text-ink-500 mb-0.5">👥 出价人数</div>
             <div className="text-base font-bold">{bidCount}</div>
           </div>
@@ -251,7 +240,7 @@ export function AuctionDetail() {
       </div>
 
       {/* 排行榜 */}
-      <div className="glass rounded-3xl mt-3 p-4 fade-up">
+      <div className="card mt-3 p-4 fade-up">
         <h3 className="font-semibold mb-3 flex items-center gap-1.5">
           <span>🏆</span>
           <span>出价排行</span>
@@ -266,16 +255,16 @@ export function AuctionDetail() {
                 key={`${b.user_id}-${b.amount}-${i}`}
                 className={`flex items-center justify-between px-3 py-2.5 rounded-2xl ${
                   i === 0
-                    ? 'glass-warm'
-                    : 'bg-white/50 border border-white/60'
+                    ? 'bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200'
+                    : 'bg-app-50'
                 }`}
               >
                 <span className="flex items-center gap-2.5">
                   <span
                     className={`w-7 h-7 inline-flex items-center justify-center rounded-full text-xs font-bold ${
                       i === 0
-                        ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-md'
-                        : 'bg-white text-ink-500 border border-white/70'
+                        ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white'
+                        : 'bg-white text-ink-500 border border-app-200'
                     }`}
                   >
                     {i + 1}
@@ -288,9 +277,7 @@ export function AuctionDetail() {
                   </span>
                 </span>
                 <span
-                  className={`font-bold ${
-                    i === 0 ? 'text-accent-700 text-lg' : 'text-ink-700'
-                  }`}
+                  className={`font-bold ${i === 0 ? 'text-accent-600 text-lg' : 'text-ink-700'}`}
                 >
                   ¥{b.amount}
                 </span>
@@ -303,7 +290,7 @@ export function AuctionDetail() {
       {/* 出价区（固定底部） */}
       {auction.status === 'active' && (
         <div className="fixed bottom-3 left-0 right-0 px-4 max-w-md mx-auto z-30">
-          <div className="glass-strong rounded-3xl p-3">
+          <div className="glass rounded-3xl p-3">
             <div className="flex items-center justify-between mb-2 text-[11px] text-ink-500 px-1">
               <span>
                 最低出价 = ¥{auction.current_price} + ¥{auction.price_step}
@@ -328,9 +315,7 @@ export function AuctionDetail() {
       )}
       {auction.status === 'pending' && (
         <div className="fixed bottom-3 left-0 right-0 px-4 max-w-md mx-auto z-30">
-          <div className="glass rounded-3xl p-4 text-center text-ink-500 text-sm">
-            竞拍尚未开始
-          </div>
+          <div className="card p-4 text-center text-ink-500 text-sm">竞拍尚未开始</div>
         </div>
       )}
     </div>
@@ -348,15 +333,12 @@ function CenterMessage({
 }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center max-w-md mx-auto p-8 text-center">
-      <div className="glass-strong rounded-3xl px-10 py-12">
+      <div className="card px-10 py-12">
         <div className="text-7xl mb-4">{emoji}</div>
         <h1 className="text-xl font-bold mb-2">{title}</h1>
       </div>
       {linkBack && (
-        <Link
-          to="/"
-          className="mt-6 text-ink-400 text-sm hover:text-ink-700"
-        >
+        <Link to="/" className="mt-6 text-ink-400 text-sm hover:text-ink-700">
           ← 返回大厅
         </Link>
       )}

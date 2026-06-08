@@ -29,13 +29,10 @@ export function OrderPage() {
   if (error)
     return (
       <div className="min-h-screen max-w-md mx-auto p-6">
-        <div className="glass-strong rounded-3xl p-10 text-center">
+        <div className="card p-10 text-center">
           <div className="text-5xl mb-3">😕</div>
           <p className="text-rose-600 mb-4">{error}</p>
-          <Link
-            to="/"
-            className="text-ink-400 hover:text-ink-700 text-sm"
-          >
+          <Link to="/" className="text-ink-400 hover:text-ink-700 text-sm">
             ← 返回大厅
           </Link>
         </div>
@@ -45,26 +42,19 @@ export function OrderPage() {
   if (!order || !auction)
     return (
       <div className="min-h-screen max-w-md mx-auto p-6">
-        <div className="glass rounded-2xl p-10 text-center text-ink-400">加载中...</div>
+        <div className="card p-10 text-center text-ink-400">加载中...</div>
       </div>
     )
 
   return (
     <div className="min-h-screen max-w-md mx-auto px-4 pb-12">
-      <header className="sticky top-3 z-10 mt-3">
-        <div className="glass rounded-3xl px-4 py-3 flex items-center justify-between">
-          <h1 className="text-lg font-bold">📋 我的订单</h1>
-          <Link
-            to="/"
-            className="text-xs text-ink-400 hover:text-ink-700"
-          >
-            ← 大厅
-          </Link>
-        </div>
-      </header>
+      <div className="pt-4 pb-2">
+        <h1 className="text-2xl font-bold tracking-tight">我的订单</h1>
+        <p className="text-xs text-ink-500 mt-1">查看与支付</p>
+      </div>
 
       <div className="space-y-3 mt-3">
-        <div className="glass-strong rounded-3xl p-5 fade-up">
+        <div className="card p-5 fade-up">
           <div className="text-xs text-ink-400 mb-1">订单号</div>
           <div className="text-sm font-mono mb-4">#{order.id}</div>
 
@@ -73,7 +63,9 @@ export function OrderPage() {
           <Divider />
           <Row
             label="成交价"
-            value={<span className="text-2xl font-bold text-accent-600">¥{order.final_price}</span>}
+            value={
+              <span className="text-2xl font-bold text-accent-600">¥{order.final_price}</span>
+            }
           />
           <Divider />
           <Row
@@ -96,9 +88,9 @@ export function OrderPage() {
             模拟支付 ¥{order.final_price}
           </button>
         ) : (
-          <div className="glass-warm rounded-3xl p-7 text-center fade-up">
+          <div className="card p-7 text-center fade-up">
             <div className="text-5xl mb-2">✅</div>
-            <div className="font-bold text-lg text-accent-700">支付成功</div>
+            <div className="font-bold text-lg text-green-600">支付成功</div>
             <div className="text-sm text-ink-500 mt-1">感谢您的购买！</div>
           </div>
         )}
@@ -124,5 +116,5 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 function Divider() {
-  return <div className="border-t border-white/60" />
+  return <div className="border-t border-app-100" />
 }

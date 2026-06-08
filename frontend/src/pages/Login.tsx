@@ -42,7 +42,7 @@ export function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="w-full max-w-sm glass-strong rounded-3xl p-8 fade-up">
+      <div className="w-full max-w-sm card p-8 fade-up">
         <div className="text-center mb-6">
           <div className="text-5xl mb-2">🏷️</div>
           <h1 className="text-2xl font-bold tracking-tight">拍卖系统</h1>
@@ -79,7 +79,7 @@ export function Login() {
               minLength={2}
               maxLength={32}
               autoComplete="username"
-              className="input-glass"
+              className="input-default"
             />
           </label>
           <label className="block">
@@ -91,12 +91,12 @@ export function Login() {
               required
               minLength={6}
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              className="input-glass"
+              className="input-default"
             />
           </label>
 
           {error && (
-            <div className="text-sm text-rose-600 bg-rose-50/60 rounded-xl px-3 py-2 border border-rose-200/60">
+            <div className="text-sm text-rose-600 bg-rose-50 rounded-xl px-3 py-2 border border-rose-200">
               ⚠ {error}
             </div>
           )}

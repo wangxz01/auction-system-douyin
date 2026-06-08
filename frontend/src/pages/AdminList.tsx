@@ -3,11 +3,9 @@ import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Auction } from '../lib/types'
 import { StatusBadge } from '../components/StatusBadge'
-import { clearAuth, getUser } from '../lib/auth'
 
 export function AdminList() {
   const nav = useNavigate()
-  const me = getUser()
   const [auctions, setAuctions] = useState<Auction[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -26,152 +24,132 @@ export function AdminList() {
 
   useEffect(load, [])
 
-  const handleStart = async (id: number) => {
+  const handleStart = async (e: React.MouseEvent, id: number) => {
+    e.preventDefault()
+    e.stopPropagation()
     try {
       await api.post(`/auctions/${id}/start`)
       load()
-    } catch (e: unknown) {
-      alert(extractError(e))
+    } catch (err) {
+      alert(extractError(err))
     }
   }
 
-  const handleCancel = async (id: number) => {
+  const handleCancel = async (e: React.MouseEvent, id: number) => {
+    e.preventDefault()
+    e.stopPropagation()
     if (!confirm('确认取消该竞拍？')) return
     try {
       await api.post(`/auctions/${id}/cancel`)
       load()
-    } catch (e: unknown) {
-      alert(extractError(e))
+    } catch (err) {
+      alert(extractError(err))
     }
   }
 
   return (
-    <div className="min-h-screen max-w-6xl mx-auto px-4 pb-12">
-      <header className="sticky top-3 z-20 mt-3">
-        <div className="glass rounded-3xl px-5 py-3 flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-bold tracking-tight">🛠️ 商家后台</h1>
-            <p className="text-[11px] text-ink-500">竞拍商品管理</p>
-          </div>
-          <div className="flex items-center gap-3">
-            {me && (
-              <div className="flex items-center gap-2 text-sm text-ink-500">
-                <span>👤 {me.username}</span>
-                <button
-                  onClick={() => {
-                    clearAuth()
-                    nav('/login')
-                  }}
-                  className="btn-glass px-3 py-1 rounded-full text-xs"
-                >
-                  退出
-                </button>
-              </div>
-            )}
-          </div>
+    <div className="max-w-5xl mx-auto px-8 py-8">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">竞拍管理</h1>
+          <p className="text-sm text-ink-500 mt-1">查看、开始或取消你发布的竞拍</p>
         </div>
-      </header>
+        <button
+          onClick={() => nav('/admin/create')}
+          className="btn-accent px-5 py-2.5 rounded-full text-sm"
+        >
+          ＋ 发布新竞拍
+        </button>
+      </div>
 
-      <main className="mt-4">
-        {loading && (
-          <div className="glass rounded-2xl p-12 text-center text-ink-400">加载中...</div>
-        )}
-        {error && (
-          <div className="glass rounded-2xl p-12 text-center text-rose-500">
-            错误: {error}
-          </div>
-        )}
-        {!loading && !error && (
-          <div className="glass-strong rounded-3xl overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-ink-500">
-                  <th className="px-4 py-3 text-left font-medium">ID</th>
-                  <th className="px-4 py-3 text-left font-medium">商品</th>
-                  <th className="px-4 py-3 text-right font-medium">起拍价</th>
-                  <th className="px-4 py-3 text-right font-medium">加价幅度</th>
-                  <th className="px-4 py-3 text-right font-medium">当前价</th>
-                  <th className="px-4 py-3 text-center font-medium">状态</th>
-                  <th className="px-4 py-3 text-right font-medium">操作</th>
+      {loading && (
+        <div className="card p-12 text-center text-ink-400">加载中...</div>
+      )}
+      {error && (
+        <div className="card p-12 text-center text-rose-500">错误: {error}</div>
+      )}
+      {!loading && !error && (
+        <div className="card overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-ink-500 bg-app-50">
+                <th className="px-4 py-3 text-left font-medium">ID</th>
+                <th className="px-4 py-3 text-left font-medium">商品</th>
+                <th className="px-4 py-3 text-right font-medium">起拍价</th>
+                <th className="px-4 py-3 text-right font-medium">加价幅度</th>
+                <th className="px-4 py-3 text-right font-medium">当前价</th>
+                <th className="px-4 py-3 text-center font-medium">状态</th>
+                <th className="px-4 py-3 text-right font-medium">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {auctions.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-16 text-center text-ink-400">
+                    <div className="text-5xl mb-2">📦</div>
+                    暂无竞拍，点击右上角发布
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {auctions.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-16 text-center text-ink-400">
-                      <div className="text-5xl mb-2">📦</div>
-                      暂无竞拍，点击右下角 ＋ 创建
-                    </td>
-                  </tr>
-                )}
-                {auctions.map((a) => (
-                  <tr
-                    key={a.id}
-                    className="border-t border-white/60 hover:bg-white/40 transition-colors"
-                  >
-                    <td className="px-4 py-3 text-ink-400">#{a.id}</td>
-                    <td className="px-4 py-3">
-                      <Link
-                        to={`/auction/${a.id}`}
-                        className="font-medium hover:text-accent-600"
-                      >
-                        {a.title}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-right text-ink-700">¥{a.start_price}</td>
-                    <td className="px-4 py-3 text-right text-ink-700">¥{a.price_step}</td>
-                    <td className="px-4 py-3 text-right text-accent-600 font-semibold">
-                      ¥{a.current_price}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <StatusBadge status={a.status} />
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {a.status === 'pending' && (
-                        <div className="flex justify-end gap-2">
-                          <button
-                            onClick={() => handleStart(a.id)}
-                            className="btn-accent px-3 py-1.5 rounded-full text-xs"
-                          >
-                            开始
-                          </button>
-                          <button
-                            onClick={() => handleCancel(a.id)}
-                            className="btn-glass px-3 py-1.5 rounded-full text-xs"
-                          >
-                            取消
-                          </button>
-                        </div>
-                      )}
-                      {a.status === 'active' && (
+              )}
+              {auctions.map((a) => (
+                <tr
+                  key={a.id}
+                  onClick={() => nav(`/admin/auctions/${a.id}`)}
+                  className="border-t border-app-100 hover:bg-app-50 transition-colors cursor-pointer"
+                >
+                  <td className="px-4 py-3 text-ink-400">#{a.id}</td>
+                  <td className="px-4 py-3">
+                    <Link
+                      to={`/admin/auctions/${a.id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="font-medium hover:text-accent-600"
+                    >
+                      {a.title}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3 text-right text-ink-700">¥{a.start_price}</td>
+                  <td className="px-4 py-3 text-right text-ink-700">¥{a.price_step}</td>
+                  <td className="px-4 py-3 text-right text-accent-600 font-semibold">
+                    ¥{a.current_price}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <StatusBadge status={a.status} />
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    {a.status === 'pending' && (
+                      <div className="flex justify-end gap-2">
                         <button
-                          onClick={() => handleCancel(a.id)}
-                          className="btn-danger px-3 py-1.5 rounded-full text-xs"
+                          onClick={(e) => handleStart(e, a.id)}
+                          className="btn-accent px-3 py-1.5 rounded-full text-xs"
                         >
-                          取消竞拍
+                          开始
                         </button>
-                      )}
-                      {(a.status === 'finished' || a.status === 'cancelled') && (
-                        <span className="text-ink-400">—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </main>
-
-      {/* 悬浮加号按钮 */}
-      <button
-        onClick={() => nav('/admin/create')}
-        className="fab fixed bottom-6 right-6 z-30"
-        aria-label="发布新竞拍"
-        title="发布新竞拍"
-      >
-        +
-      </button>
+                        <button
+                          onClick={(e) => handleCancel(e, a.id)}
+                          className="btn-default px-3 py-1.5 rounded-full text-xs"
+                        >
+                          取消
+                        </button>
+                      </div>
+                    )}
+                    {a.status === 'active' && (
+                      <button
+                        onClick={(e) => handleCancel(e, a.id)}
+                        className="btn-danger px-3 py-1.5 rounded-full text-xs"
+                      >
+                        取消竞拍
+                      </button>
+                    )}
+                    {(a.status === 'finished' || a.status === 'cancelled') && (
+                      <span className="text-ink-400">—</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }

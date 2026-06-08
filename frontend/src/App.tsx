@@ -5,12 +5,19 @@ import { OrderPage } from './pages/OrderPage'
 import { Me } from './pages/Me'
 import { AdminList } from './pages/AdminList'
 import { AdminCreate } from './pages/AdminCreate'
+import { AdminAuctionDetail } from './pages/AdminAuctionDetail'
 import { Login } from './pages/Login'
 import { RequireAuth } from './components/RequireAuth'
 import { PhoneFrame } from './components/PhoneFrame'
+import { AdminLayout } from './components/AdminLayout'
 
-// 把用户端页面统一包进手机壳里（桌面端显示，移动端透明）
 const inPhone = (el: React.ReactNode) => <PhoneFrame>{el}</PhoneFrame>
+
+const inAdmin = (el: React.ReactNode) => (
+  <RequireAuth>
+    <AdminLayout>{el}</AdminLayout>
+  </RequireAuth>
+)
 
 export default function App() {
   return (
@@ -30,23 +37,10 @@ export default function App() {
           )}
         />
 
-        {/* 商家端：PC 后台，宽屏布局 */}
-        <Route
-          path="/admin"
-          element={
-            <RequireAuth>
-              <AdminList />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/admin/create"
-          element={
-            <RequireAuth>
-              <AdminCreate />
-            </RequireAuth>
-          }
-        />
+        {/* 商家端：PC 后台，左侧导航 + 内容区 */}
+        <Route path="/admin" element={inAdmin(<AdminList />)} />
+        <Route path="/admin/create" element={inAdmin(<AdminCreate />)} />
+        <Route path="/admin/auctions/:id" element={inAdmin(<AdminAuctionDetail />)} />
       </Routes>
     </BrowserRouter>
   )

@@ -1,18 +1,21 @@
 @import "tailwindcss";
 
 @theme {
-  --color-warm-50:  #FFFBF2;
-  --color-warm-100: #FFF4D9;
-  --color-warm-200: #FFE9B0;
+  --color-app-50:  #FAFAFB;
+  --color-app-100: #F2F2F4;
+  --color-app-200: #E8E8EA;
+  --color-app-300: #D8D8DC;
   --color-accent-300: #FFDF7A;
   --color-accent-400: #FFCC4D;
   --color-accent-500: #FFB627;
   --color-accent-600: #FF9500;
   --color-accent-700: #E07B00;
   --color-ink-900: #1d1d1f;
+  --color-ink-800: #2c2c2e;
   --color-ink-700: #4a4a52;
   --color-ink-500: #86868b;
   --color-ink-400: #a6a6ad;
+  --color-ink-300: #c7c7cc;
 
   --font-display: -apple-system, BlinkMacSystemFont, "PingFang SC", "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
 }
@@ -29,113 +32,85 @@ html, body, #root {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* === 液态玻璃背景：暖色 mesh gradient + 微噪声 === */
+/* 移动设备：淡灰应用底色 */
 body {
-  background:
-    radial-gradient(at 8% 0%,  hsla(40, 95%, 80%, 0.55) 0%, transparent 45%),
-    radial-gradient(at 92% 12%, hsla(20, 95%, 82%, 0.50) 0%, transparent 50%),
-    radial-gradient(at 50% 100%, hsla(48, 100%, 85%, 0.6) 0%, transparent 55%),
-    radial-gradient(at 75% 60%, hsla(340, 80%, 88%, 0.40) 0%, transparent 60%),
-    #faf7f2;
-  background-attachment: fixed;
+  background: #F2F2F4;
 }
 
-/* === Liquid Glass 主类 === */
+/* ============================================================
+   卡片 / 玻璃工具类（中性配色，弱玻璃）
+   ============================================================ */
+
+.card {
+  background: #ffffff;
+  border-radius: 20px;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.03),
+    0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+.card-hover { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+.card-hover:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.04),
+    0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+/* 弱玻璃：用于浮动 bar / sticky header */
 .glass {
-  background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.65);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.85),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.1),
-    0 6px 22px rgba(180, 130, 60, 0.10),
-    0 1px 4px rgba(180, 130, 60, 0.06);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
-.glass-strong {
-  background: rgba(255, 255, 255, 0.78);
-  backdrop-filter: blur(36px) saturate(200%);
-  -webkit-backdrop-filter: blur(36px) saturate(200%);
-  border: 1px solid rgba(255, 255, 255, 0.75);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    0 10px 36px rgba(160, 120, 50, 0.12);
-}
+/* ============================================================
+   按钮 —— 只有"激活/主动作"才是黄色，其余皆灰
+   ============================================================ */
 
-.glass-soft {
-  background: rgba(255, 255, 255, 0.35);
-  backdrop-filter: blur(18px) saturate(160%);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
-  border: 1px solid rgba(255, 255, 255, 0.45);
-}
-
-.glass-warm {
-  background: linear-gradient(135deg,
-    rgba(255, 220, 130, 0.45),
-    rgba(255, 180, 100, 0.30)
-  );
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid rgba(255, 220, 130, 0.6);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.7),
-    0 8px 28px rgba(255, 170, 50, 0.18);
-}
-
-/* === 强调按钮（黄色渐变，立体高光） === */
 .btn-accent {
-  position: relative;
   background: linear-gradient(135deg, #FFD451 0%, #FFB627 50%, #FF9500 100%);
   color: #3a2a00;
   font-weight: 600;
-  border: 1px solid rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.5);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.8),
-    inset 0 -1px 0 rgba(180, 100, 0, 0.25),
-    0 6px 18px rgba(255, 152, 0, 0.4),
-    0 2px 6px rgba(255, 152, 0, 0.25);
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 4px 14px rgba(255, 152, 0, 0.32);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 .btn-accent:hover:not(:disabled) {
   transform: translateY(-1px);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.8),
-    inset 0 -1px 0 rgba(180, 100, 0, 0.25),
-    0 10px 24px rgba(255, 152, 0, 0.5),
-    0 3px 8px rgba(255, 152, 0, 0.3);
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 8px 20px rgba(255, 152, 0, 0.4);
 }
-.btn-accent:active:not(:disabled) {
-  transform: translateY(0);
-}
+.btn-accent:active:not(:disabled) { transform: translateY(0); }
 .btn-accent:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* === 玻璃按钮（次要操作） === */
-.btn-glass {
-  background: rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.7);
+.btn-default {
+  background: #F2F2F4;
   color: #1d1d1f;
   font-weight: 500;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.05);
   transition: background 0.15s ease;
 }
-.btn-glass:hover { background: rgba(255, 255, 255, 0.8); }
+.btn-default:hover:not(:disabled) { background: #E8E8EA; }
 
-/* === 危险按钮 === */
 .btn-danger {
-  background: linear-gradient(135deg, #FF8A85, #FF5C5C);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.4),
-    0 4px 14px rgba(255, 92, 92, 0.4);
+  background: #FFE5E5;
+  color: #C53030;
+  font-weight: 500;
+  border: 1px solid rgba(197, 48, 48, 0.15);
+  transition: background 0.15s ease;
 }
+.btn-danger:hover:not(:disabled) { background: #FFD0D0; }
 
-/* === FAB（悬浮加号按钮） === */
+/* ============================================================
+   悬浮加号按钮（商家创建）
+   ============================================================ */
 .fab {
   width: 56px;
   height: 56px;
@@ -148,22 +123,22 @@ body {
   justify-content: center;
   border: 1px solid rgba(255, 255, 255, 0.5);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.8),
-    0 8px 28px rgba(255, 149, 0, 0.45),
-    0 2px 8px rgba(255, 149, 0, 0.3);
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 8px 24px rgba(255, 149, 0, 0.35);
   transition: transform 0.15s ease;
 }
 .fab:hover { transform: scale(1.06); }
 .fab:active { transform: scale(0.96); }
 
-/* === Pill 切换 === */
+/* ============================================================
+   Pill Tab —— 激活态才是黄色，未激活为灰文字
+   ============================================================ */
 .pill-group {
   display: inline-flex;
   padding: 4px;
-  background: rgba(255, 255, 255, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.05);
   border-radius: 9999px;
-  backdrop-filter: blur(20px) saturate(180%);
 }
 .pill-tab {
   padding: 6px 18px;
@@ -174,35 +149,38 @@ body {
   transition: all 0.2s ease;
 }
 .pill-tab[data-active="true"] {
-  background: white;
-  color: #FF9500;
+  background: linear-gradient(135deg, #FFD451, #FFB627);
+  color: #3a2a00;
   font-weight: 600;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 2px 8px rgba(255, 149, 0, 0.18);
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 2px 6px rgba(255, 149, 0, 0.25);
 }
 
-/* === 输入框 === */
-.input-glass {
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(12px);
+/* ============================================================
+   输入框
+   ============================================================ */
+.input-default {
+  background: #F2F2F4;
+  border: 1px solid transparent;
   border-radius: 12px;
   padding: 10px 14px;
   width: 100%;
   font-size: 15px;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
-.input-glass:focus {
+.input-default:focus {
   outline: none;
-  background: rgba(255, 255, 255, 0.85);
+  background: #ffffff;
   border-color: #FFB627;
-  box-shadow: 0 0 0 3px rgba(255, 182, 39, 0.2);
+  box-shadow: 0 0 0 3px rgba(255, 182, 39, 0.18);
 }
 
-/* === 价格闪烁动画 === */
+/* ============================================================
+   动效
+   ============================================================ */
 @keyframes flash-pop {
-  0%   { background-color: rgba(255, 200, 50, 0.65); transform: scale(1.05); }
+  0%   { background-color: rgba(255, 200, 50, 0.55); transform: scale(1.04); }
   100% { background-color: transparent; transform: scale(1); }
 }
 .flash {
@@ -210,24 +188,20 @@ body {
   border-radius: 12px;
 }
 
-/* === 渐显进入 === */
 @keyframes fade-up {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 .fade-up { animation: fade-up 0.35s ease-out both; }
 
-/* === 滚动条美化 === */
+/* 滚动条 */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb {
-  background: rgba(180, 130, 60, 0.25);
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(180, 130, 60, 0.4);
-}
+::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.15); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.25); }
 
-/* === 底部 Tab 导航（用户端） === */
+/* ============================================================
+   📱 BottomNav（用户端底部）
+   ============================================================ */
 .bottom-nav {
   position: fixed;
   bottom: 0;
@@ -236,13 +210,10 @@ body {
   z-index: 50;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  background: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  border-top: 1px solid rgba(255, 255, 255, 0.7);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 -2px 12px rgba(160, 120, 50, 0.06);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
   padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
 }
 .bottom-nav-item {
@@ -250,28 +221,70 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #86868b;
+  color: #a6a6ad;
   padding: 6px 0;
   transition: color 0.15s ease, transform 0.15s ease;
 }
-.bottom-nav-item.is-active {
+.bottom-nav-item.is-active { color: #FF9500; }
+.bottom-nav-item.is-active .text-xl { transform: scale(1.1); }
+
+/* ============================================================
+   🖥️ AdminSidebar（商家左侧导航，2.jpg 风格）
+   ============================================================ */
+.admin-sidebar {
+  width: 96px;
+  flex-shrink: 0;
+  background: #ffffff;
+  border-right: 1px solid rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 0;
+  gap: 4px;
+}
+.admin-sidebar-brand {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #FFD451, #FF9500);
+  color: #3a2a00;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 12px rgba(255, 149, 0, 0.3);
+}
+.admin-sidebar-item {
+  width: 72px;
+  padding: 10px 0;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: #86868b;
+  font-size: 11px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+.admin-sidebar-item:hover { background: #F5F5F7; }
+.admin-sidebar-item.is-active {
   color: #FF9500;
+  background: #FFF8E5;
+  font-weight: 600;
 }
-.bottom-nav-item.is-active .text-xl {
-  transform: scale(1.1);
-}
+.admin-sidebar-item .icon { font-size: 22px; line-height: 1; }
+.admin-sidebar-spacer { flex: 1; }
 
 /* ============================================================
    📱 PhoneFrame：仅 md+ 显示 iPhone 边框
-   移动端（<768px）所有 .phone-* 都没有样式，pass-through。
    ============================================================ */
 
 @media (min-width: 768px) {
-  /* 桌面端把 body 背景换成中性灰，把暖色 mesh 留到手机屏内 */
-  body {
-    background: linear-gradient(135deg, #E8E8EA 0%, #D8D8DC 100%);
-    background-attachment: fixed;
-  }
+  /* 桌面 body：稍深的中性灰，便于手机/后台容器浮起来 */
+  body { background: #E8E8EA; }
 
   .phone-wrap {
     display: flex;
@@ -281,7 +294,6 @@ body {
     padding: 2.5rem 1rem;
   }
 
-  /* 手机外壳（金属边框 + 阴影） */
   .phone-bezel {
     width: 414px;
     height: min(844px, calc(100vh - 5rem));
@@ -296,22 +308,15 @@ body {
       0 15px 35px -5px rgba(0, 0, 0, 0.25);
   }
 
-  /* 屏幕 */
   .phone-screen {
     width: 100%;
     height: 100%;
     border-radius: 44px;
     overflow: hidden;
     position: relative;
-    background:
-      radial-gradient(at 8% 0%,  hsla(40, 95%, 80%, 0.55) 0%, transparent 45%),
-      radial-gradient(at 92% 12%, hsla(20, 95%, 82%, 0.50) 0%, transparent 50%),
-      radial-gradient(at 50% 100%, hsla(48, 100%, 85%, 0.6) 0%, transparent 55%),
-      radial-gradient(at 75% 60%, hsla(340, 80%, 88%, 0.40) 0%, transparent 60%),
-      #faf7f2;
+    background: #F2F2F4;
   }
 
-  /* 灵动岛（Dynamic Island） */
   .phone-screen::before {
     content: '';
     position: absolute;
@@ -323,45 +328,39 @@ body {
     background: #000;
     border-radius: 999px;
     z-index: 1000;
-    box-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.06) inset,
-      0 2px 6px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
   }
 
-  /* 顶部状态栏：时间 + 信号 */
   .phone-screen::after {
-    content: '🕘 23:14   ●●●●● 5G';
+    content: '23:14';
     position: absolute;
-    top: 18px;
-    left: 24px;
-    font-size: 11px;
+    top: 20px;
+    left: 28px;
+    font-size: 13px;
     font-weight: 600;
-    color: rgba(20, 20, 25, 0.85);
+    color: #1d1d1f;
     z-index: 999;
     letter-spacing: 0.3px;
   }
 
-  /* 屏幕内容容器（可滚动） */
   .phone-content {
     width: 100%;
     height: 100%;
     overflow-y: auto;
     overflow-x: hidden;
-    padding-top: 50px; /* 给灵动岛留位置 */
+    padding-top: 54px;
+    position: relative;
   }
 
-  /* 内部细滚动条 */
   .phone-content::-webkit-scrollbar { width: 4px; }
-  .phone-content::-webkit-scrollbar-thumb {
-    background: rgba(180, 130, 60, 0.2);
-  }
+  .phone-content::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.12); }
 
-  /* 内部 min-h-screen 改成填满手机屏 */
   .phone-content .min-h-screen {
-    min-height: calc(100% - 50px);
+    min-height: calc(100% - 54px);
   }
 
-  /* 内部 fixed bottom 元素：定位锚到手机屏而不是视口 */
+  /* 关键修复：bottom-nav 在手机内时定位锚到手机屏 */
+  .phone-content .bottom-nav,
   .phone-content .fixed {
     position: absolute;
   }
