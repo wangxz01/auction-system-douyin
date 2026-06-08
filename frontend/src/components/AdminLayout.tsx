@@ -2,8 +2,9 @@ import type { ReactNode } from 'react'
 import { AdminSidebar } from './AdminSidebar'
 
 export function AdminLayout({ children }: { children: ReactNode }) {
+  // 不显式设背景，让 body 的暖色 mesh 透过来，给左栏玻璃提供可模糊的内容
   return (
-    <div className="min-h-screen flex" style={{ background: '#F2F2F7' }}>
+    <div className="min-h-screen flex">
       <AdminSidebar />
       <main className="flex-1 min-w-0 overflow-x-auto">{children}</main>
     </div>

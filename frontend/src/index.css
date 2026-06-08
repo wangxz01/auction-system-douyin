@@ -323,19 +323,29 @@ body {
 .bottom-nav-item.is-active { color: #FF9500; }
 
 /* ============================================================
-   🖥️ AdminSidebar（商家左侧导航 — iOS 灰白克制风）
+   🖥️ AdminSidebar（玻璃浮岛 · 内容垂直居中 · 仅文字变色）
    ============================================================ */
 .admin-sidebar {
   width: 88px;
   flex-shrink: 0;
-  background: #ffffff;
-  border-right: 1px solid rgba(60, 60, 67, 0.18);
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 20px 8px;
-  gap: 2px;
+  padding: 24px 0;
+  gap: 4px;
   position: relative;
+
+  /* 稍深一点的玻璃 */
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.55) 0%,
+    rgba(230, 230, 240, 0.50) 100%
+  );
+  backdrop-filter: blur(40px) saturate(200%);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset -1px 0 0 rgba(255, 255, 255, 0.3);
 }
 .admin-sidebar::after {
   content: '';
@@ -344,10 +354,11 @@ body {
   right: 0;
   bottom: 0;
   width: 1px;
-  background: rgba(60, 60, 67, 0.12);
+  background: rgba(60, 60, 67, 0.18);
   transform: scaleX(0.5);
   transform-origin: right;
 }
+
 .admin-sidebar-brand {
   width: 44px;
   height: 44px;
@@ -359,8 +370,9 @@ body {
   justify-content: center;
   font-size: 20px;
   font-weight: 700;
-  margin-bottom: 18px;
+  flex-shrink: 0;
 }
+
 .admin-sidebar-item {
   width: 72px;
   padding: 10px 0;
@@ -372,16 +384,29 @@ body {
   color: #8E8E93;
   font-size: 11px;
   font-weight: 500;
-  transition: background-color 0.12s ease, color 0.12s ease;
+  transition: color 0.12s ease;
+  background: transparent;
 }
-.admin-sidebar-item:hover { background: #F2F2F7; }
+/* 悬浮时只让颜色深一点，不加底色 */
+.admin-sidebar-item:hover { color: #1d1d1f; }
+
+/* 激活态：只换文字 + 图标颜色，不动底 */
 .admin-sidebar-item.is-active {
   color: #FF9500;
-  background: #F2F2F7;
   font-weight: 600;
+  background: transparent;
 }
 .admin-sidebar-item .icon { font-size: 22px; line-height: 1; }
-.admin-sidebar-spacer { flex: 1; }
+.admin-sidebar-spacer { flex: 1; min-height: 12px; }
+
+/* 让背景的玻璃感更明显：body 渐入一点点暖色 */
+body {
+  background:
+    radial-gradient(at 0% 30%, rgba(255, 220, 180, 0.18) 0%, transparent 40%),
+    radial-gradient(at 100% 80%, rgba(220, 230, 255, 0.16) 0%, transparent 50%),
+    #F2F2F7;
+  background-attachment: fixed;
+}
 
 /* 商家页面统一头部（大标题 + 副标） */
 .admin-page-header {
@@ -407,8 +432,15 @@ body {
    ============================================================ */
 
 @media (min-width: 768px) {
-  /* 桌面 body：稍深的中性灰，便于手机/后台容器浮起来 */
-  body { background: #E8E8EA; }
+  /* 桌面：保留同色 mesh 以便玻璃有可模糊的内容 */
+  body {
+    background:
+      radial-gradient(at 0% 30%, rgba(255, 220, 180, 0.30) 0%, transparent 45%),
+      radial-gradient(at 100% 80%, rgba(220, 230, 255, 0.28) 0%, transparent 55%),
+      radial-gradient(at 50% 0%, rgba(255, 240, 200, 0.20) 0%, transparent 50%),
+      #ECECEF;
+    background-attachment: fixed;
+  }
 
   .phone-wrap {
     display: flex;
