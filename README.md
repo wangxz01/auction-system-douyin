@@ -24,13 +24,16 @@
 
 固定的左侧导航栏（参考桌面 App 风格），右侧大块内容区。商家端**没有任何回跳用户端的入口**，与用户端完全隔离。
 
+当前开发环境已创建 `admin` 账号，并通过后端环境变量 `ADMIN_USERNAMES=admin` 设置为超级管理员。使用 `admin` 登录后可进入 `/admin` 系列页面，管理全部竞拍、商家和订单。普通商家账号需要先在 `merchants` 表中处于 `active` 状态，只能管理自己发布的竞拍和订单。
+
 | 路由 | 页面 | 说明 |
 |---|---|---|
 | <http://localhost:5173/admin> | 竞拍管理 | 全部竞拍表格 + 行内开始/取消（需登录） |
-| `/admin/auctions/:id` | 商品详情 | 商家专属：商品信息 + 价格规则 + 出价历史 + 订单 + 开始/取消 |
-| `/admin/create` | 发布商品 | 创建新竞拍（需登录） |
+| `/admin/auctions/:id` | 商品详情 | 商品信息 + 规则查看/编辑（未开始）+ 出价历史 + 订单 + 开始/取消 |
+| `/admin/create` | 发布商品 | 创建新竞拍，支持图片上传或图片 URL |
+| `/admin/orders` | 订单管理 | 查看当前商家的成交订单和对应竞拍 |
 
-左侧栏：🏷️ Logo · 📋 竞拍管理 · ➕ 发布商品 · 👤 当前账号 · ↩ 退出
+左侧栏：🏷️ Logo · 📋 竞拍管理 · ➕ 发布商品 · 🧾 订单管理 · 👤 当前账号 · ↩ 退出
 
 > 用户端页面按手机尺寸设计。桌面浏览器访问会自动套一个 iPhone 形状的边框（含灵动岛 + 状态栏），底部 Tab 栏锚定在手机屏幕内部，整体视觉就像一台真机摆在桌面上。窗口宽度 < 768px 时（真机访问或开发者工具切到移动模式）边框自动隐藏。
 
@@ -86,6 +89,18 @@
 | 生产安全配置 | ✅ | release 模式必须显式配置 `JWT_SECRET` 和 `ALLOWED_ORIGINS` |
 | 评论历史一致性 | ✅ | 不存在的竞拍评论历史返回 404 |
 | 后端测试 | ✅ | 覆盖评论、权限、金额分字段、订单保护、并发出价和安全配置 |
+
+### ✅ 第八阶段：商家后台基础补齐（已完成）
+
+目标：补齐商家/主播端的发布、商品管理和订单管理基础工作流，界面先保持简单可用。
+
+| 模块 | 状态 | 说明 |
+|---|---|---|
+| 图片上传 | ✅ | `POST /api/admin/uploads/images` 保存图片并返回可访问 URL |
+| 延时机制配置 | ✅ | 创建/编辑竞拍时可配置 `auto_extend_seconds` |
+| 未开始竞拍编辑 | ✅ | `PUT /api/auctions/:id` 仅允许修改 pending 竞拍 |
+| 订单管理页 | ✅ | `/admin/orders` 查看商家的成交订单 |
+| 后端测试 | ✅ | 覆盖编辑规则、订单列表、上传图片和自定义延时 |
 
 ### ✅ 第五阶段：用户系统（已完成）
 
@@ -228,6 +243,7 @@ GET    /ws/auctions/:id
 # 以下接口需要 Authorization: Bearer <token>
 GET    /api/auth/me
 POST   /api/auctions
+PUT    /api/auctions/:id
 POST   /api/auctions/:id/start
 POST   /api/auctions/:id/cancel
 POST   /api/auctions/:id/bids
@@ -238,6 +254,8 @@ GET    /api/me/orders
 GET    /api/admin/merchants
 POST   /api/admin/merchants
 DELETE /api/admin/merchants/:user_id
+GET    /api/admin/orders
+POST   /api/admin/uploads/images
 ```
 
 **业务规则要点**
@@ -245,7 +263,7 @@ DELETE /api/admin/merchants/:user_id
 - 所有成功响应 `{"data": ...}`，失败响应 `{"error": "原因"}`
 - 出价校验顺序：状态 → 是否过期 → 加价幅度 → 封顶价
 - 加价规则：`amount_cents = current_price_cents + n × price_step_cents` (n ≥ 1)
-- 自动延时：距 `ends_at` 不足 30s 出价 → ends_at 延后到 30s
+- 自动延时：距 `ends_at` 不足 `auto_extend_seconds` 出价 → ends_at 延后到对应秒数（默认 30s）
 - 封顶价命中：立即 finished + 生成订单
 - 定时器幂等：用条件更新避免与封顶价路径重复生成订单
 - 订单表 `auction_id` 加唯一索引，双保险
@@ -346,6 +364,7 @@ auction-system/
 | `current_price_cents` | bigint | — | 当前价（分） |
 | `start_price`/`price_step`/`ceiling_price`/`current_price` | decimal(12,2) | — | 兼容旧前端的元字段 |
 | `duration_seconds` | bigint | — | 持续秒数 |
+| `auto_extend_seconds` | bigint | — | 自动延时秒数，默认 30 |
 | `status` | varchar(16) | IDX | pending / active / finished / cancelled |
 | `winner_id` | bigint unsigned | — | 中标用户（可空） |
 | `started_at` | datetime(3) | — | 开始时间 |
@@ -503,6 +522,17 @@ ADMIN_USERNAMES=admin
 
 > `SERVER_MODE=release` 时必须显式配置 `JWT_SECRET` 和 `ALLOWED_ORIGINS`，且 `ALLOWED_ORIGINS` 不能为 `*`。
 
+### 超级管理员账号
+
+当前项目约定使用已注册的 `admin` 用户作为开发环境超级管理员：
+
+1. 后端 `.env` 保持 `ADMIN_USERNAMES=admin`
+2. 重启后端让配置生效
+3. 前端登录 `admin` 账号
+4. 访问 `/admin`、`/admin/create`、`/admin/orders` 管理竞拍、商家和订单
+
+超级管理员按 `username` 判断，不依赖固定用户 ID。多个管理员可用英文逗号分隔，例如 `ADMIN_USERNAMES=admin,root,boss`。
+
 ### 前端 `frontend/.env`
 
 ```env
@@ -558,6 +588,7 @@ A: 后端 `.env` 改完要重启 `go run`；前端 `.env` 改完要重启 `npm r
 
 ## 📅 更新记录
 
+- **2026-06-08** — 补齐商家后台基础工作流：图片上传、未开始竞拍编辑、自定义延时、订单管理页
 - **2026-06-08** — 完成第七阶段：后端核心加固，出价事务锁、商家权限、订单保护、金额分字段、生产安全配置和测试覆盖
 - **2026-06-08** — 完成直播评论持久化：comments 表、历史评论接口、POST 评论接口、WebSocket `new_comment`
 - **2026-06-07** — 完成第六阶段：UI 全面升级，液态玻璃 + 暖色 mesh 背景 + 黄橙 accent 配色

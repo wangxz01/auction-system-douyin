@@ -13,8 +13,10 @@ export function AdminCreate() {
     price_step: 10,
     ceiling_price: '',
     duration_seconds: 300,
+    auto_extend_seconds: 30,
   })
   const [submitting, setSubmitting] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const update = (k: keyof typeof form, v: string | number) => setForm({ ...form, [k]: v })
@@ -32,6 +34,7 @@ export function AdminCreate() {
         start_price: Number(form.start_price),
         price_step: Number(form.price_step),
         duration_seconds: Number(form.duration_seconds),
+        auto_extend_seconds: Number(form.auto_extend_seconds),
       }
       if (form.ceiling_price !== '') body.ceiling_price = Number(form.ceiling_price)
       await api.post('/auctions', body)
@@ -41,6 +44,23 @@ export function AdminCreate() {
       setError(r?.data?.error ?? '提交失败')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const uploadImage = async (file: File | null) => {
+    if (!file) return
+    setUploading(true)
+    setError(null)
+    try {
+      const body = new FormData()
+      body.append('file', file)
+      const r = await api.post<{ data: { url: string } }>('/admin/uploads/images', body)
+      update('image_url', r.data.data.url)
+    } catch (e: unknown) {
+      const r = (e as { response?: { data?: { error?: string } } }).response
+      setError(r?.data?.error ?? '图片上传失败')
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -77,6 +97,16 @@ export function AdminCreate() {
             placeholder="https://..."
             type="url"
           />
+          <label className="ios-list-item">
+            <span className="text-[#000] w-28 shrink-0 text-[15px]">上传图片</span>
+            <input
+              type="file"
+              accept="image/*"
+              disabled={uploading}
+              onChange={(e) => void uploadImage(e.currentTarget.files?.[0] ?? null)}
+              className="flex-1 text-right text-[13px]"
+            />
+          </label>
         </div>
 
         {/* 直播配置 */}
@@ -136,6 +166,15 @@ export function AdminCreate() {
             required
             suffix="秒"
             placeholder="必填"
+          />
+          <RowInput
+            label="延时机制"
+            value={String(form.auto_extend_seconds)}
+            onChange={(v) => update('auto_extend_seconds', v)}
+            type="number"
+            required
+            suffix="秒"
+            placeholder="默认 30"
           />
         </div>
 

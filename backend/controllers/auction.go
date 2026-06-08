@@ -25,6 +25,7 @@ type createAuctionReq struct {
 	CeilingPrice      *float64 `json:"ceiling_price"`
 	CeilingPriceCents *int64   `json:"ceiling_price_cents"`
 	DurationSeconds   int      `json:"duration_seconds"`
+	AutoExtendSeconds int      `json:"auto_extend_seconds"`
 }
 
 func CreateAuction(c *gin.Context) {
@@ -79,9 +80,17 @@ func CreateAuction(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "duration_seconds 必须大于 0"})
 		return
 	}
+	if req.AutoExtendSeconds < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "auto_extend_seconds 不能小于 0"})
+		return
+	}
 	if ceilingPriceCents != nil && *ceilingPriceCents <= startPriceCents {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ceiling_price 必须大于 start_price"})
 		return
+	}
+	autoExtendSeconds := req.AutoExtendSeconds
+	if autoExtendSeconds == 0 {
+		autoExtendSeconds = int(autoExtendThreshold / time.Second)
 	}
 
 	a := models.Auction{
@@ -99,9 +108,105 @@ func CreateAuction(c *gin.Context) {
 		CurrentPrice:      centsToFloat(startPriceCents),
 		CurrentPriceCents: startPriceCents,
 		DurationSeconds:   req.DurationSeconds,
+		AutoExtendSeconds: autoExtendSeconds,
 		Status:            "pending",
 	}
 	if err := config.DB.Create(&a).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": a})
+}
+
+func UpdateAuction(c *gin.Context) {
+	id, err := parseID(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id 不合法"})
+		return
+	}
+	var a models.Auction
+	if err := config.DB.First(&a, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "竞拍不存在"})
+		return
+	}
+	if a.Status != "pending" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "只有未开始竞拍可以修改规则"})
+		return
+	}
+	if !canManageAuction(c, a) {
+		return
+	}
+
+	var req createAuctionReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误: " + err.Error()})
+		return
+	}
+	req.Title = strings.TrimSpace(req.Title)
+	req.ImageURL = strings.TrimSpace(req.ImageURL)
+	req.StreamURL = strings.TrimSpace(req.StreamURL)
+	if req.Title == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "title 必填"})
+		return
+	}
+	if len([]rune(req.Title)) > 80 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "title 不能超过 80 个字符"})
+		return
+	}
+	if len(req.ImageURL) > 512 || len(req.StreamURL) > 500 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "图片或直播 URL 过长"})
+		return
+	}
+	startPriceCents := centsOrLegacy(0, req.StartPrice)
+	if req.StartPriceCents != nil {
+		startPriceCents = *req.StartPriceCents
+	}
+	priceStepCents := centsOrLegacy(0, req.PriceStep)
+	if req.PriceStepCents != nil {
+		priceStepCents = *req.PriceStepCents
+	}
+	ceilingPriceCents := optionalCentsOrLegacy(req.CeilingPriceCents, req.CeilingPrice)
+	if startPriceCents <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "start_price 必须大于 0"})
+		return
+	}
+	if priceStepCents <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "price_step 必须大于 0"})
+		return
+	}
+	if req.DurationSeconds <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "duration_seconds 必须大于 0"})
+		return
+	}
+	if req.AutoExtendSeconds < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "auto_extend_seconds 不能小于 0"})
+		return
+	}
+	if ceilingPriceCents != nil && *ceilingPriceCents <= startPriceCents {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ceiling_price 必须大于 start_price"})
+		return
+	}
+	autoExtendSeconds := req.AutoExtendSeconds
+	if autoExtendSeconds == 0 {
+		autoExtendSeconds = int(autoExtendThreshold / time.Second)
+	}
+
+	a.Title = req.Title
+	a.Description = req.Description
+	a.ImageURL = req.ImageURL
+	a.StreamURL = req.StreamURL
+	a.StartPrice = centsToFloat(startPriceCents)
+	a.StartPriceCents = startPriceCents
+	a.PriceStep = centsToFloat(priceStepCents)
+	a.PriceStepCents = priceStepCents
+	a.CeilingPrice = legacyFloatPointer(ceilingPriceCents)
+	a.CeilingPriceCents = ceilingPriceCents
+	a.CurrentPrice = centsToFloat(startPriceCents)
+	a.CurrentPriceCents = startPriceCents
+	a.DurationSeconds = req.DurationSeconds
+	a.AutoExtendSeconds = autoExtendSeconds
+
+	if err := config.DB.Save(&a).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

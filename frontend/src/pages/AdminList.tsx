@@ -83,6 +83,7 @@ export function AdminList() {
                 <th className="px-5 py-3 text-right font-medium">起拍价</th>
                 <th className="px-5 py-3 text-right font-medium">加价幅度</th>
                 <th className="px-5 py-3 text-right font-medium">当前价</th>
+                <th className="px-5 py-3 text-right font-medium">成交结果</th>
                 <th className="px-5 py-3 text-center font-medium">状态</th>
                 <th className="px-5 py-3 text-right font-medium">操作</th>
               </tr>
@@ -90,7 +91,7 @@ export function AdminList() {
             <tbody>
               {auctions.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-5 py-16 text-center text-[#8E8E93]">
+                  <td colSpan={8} className="px-5 py-16 text-center text-[#8E8E93]">
                     <div className="text-5xl mb-2">📦</div>
                     暂无竞拍
                   </td>
@@ -108,6 +109,11 @@ export function AdminList() {
                   <td className="px-5 py-3 text-right text-[#3C3C43]">¥{a.price_step}</td>
                   <td className="px-5 py-3 text-right text-[#FF9500] font-semibold">
                     ¥{a.current_price}
+                  </td>
+                  <td className="px-5 py-3 text-right text-[#3C3C43]">
+                    {a.status === 'finished'
+                      ? `¥${a.current_price} / UID ${a.winner_id ?? '无'}`
+                      : '—'}
                   </td>
                   <td className="px-5 py-3 text-center">
                     <StatusBadge status={a.status} />

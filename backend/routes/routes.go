@@ -18,6 +18,7 @@ func Register(r *gin.Engine) {
 	}))
 
 	r.GET("/health", controllers.Health)
+	r.Static("/uploads", "./uploads")
 
 	// WebSocket（不鉴权，订阅是只读的）
 	r.GET("/ws/auctions/:id", controllers.HandleWS)
@@ -42,6 +43,7 @@ func Register(r *gin.Engine) {
 
 			auth.GET("/auctions/:id/order", controllers.GetOrder)
 			auth.POST("/auctions", controllers.CreateAuction)
+			auth.PUT("/auctions/:id", controllers.UpdateAuction)
 			auth.POST("/auctions/:id/start", controllers.StartAuction)
 			auth.POST("/auctions/:id/cancel", controllers.CancelAuction)
 			auth.POST("/auctions/:id/bids", controllers.PlaceBid)
@@ -50,6 +52,8 @@ func Register(r *gin.Engine) {
 			auth.GET("/admin/merchants", controllers.ListMerchants)
 			auth.POST("/admin/merchants", controllers.UpsertMerchant)
 			auth.DELETE("/admin/merchants/:user_id", controllers.DisableMerchant)
+			auth.GET("/admin/orders", controllers.ListAdminOrders)
+			auth.POST("/admin/uploads/images", controllers.UploadImage)
 
 			// 当前用户的聚合数据
 			auth.GET("/me/bids", controllers.GetMyBids)

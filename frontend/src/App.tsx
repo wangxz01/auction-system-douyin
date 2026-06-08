@@ -8,6 +8,7 @@ import { MyOrders } from './pages/MyOrders'
 import { AdminList } from './pages/AdminList'
 import { AdminCreate } from './pages/AdminCreate'
 import { AdminAuctionDetail } from './pages/AdminAuctionDetail'
+import { AdminOrders } from './pages/AdminOrders'
 import { Login } from './pages/Login'
 import { RequireAuth } from './components/RequireAuth'
 import { PhoneFrame } from './components/PhoneFrame'
@@ -58,6 +59,7 @@ export default function App() {
         {/* 商家端：PC 后台，左侧导航 + 内容区 */}
         <Route path="/admin" element={inAdmin(<AdminList />)} />
         <Route path="/admin/create" element={inAdmin(<AdminCreate />)} />
+        <Route path="/admin/orders" element={inAdmin(<AdminOrders />)} />
         <Route path="/admin/auctions/:id" element={inAdmin(<AdminAuctionDetail />)} />
       </Routes>
     </BrowserRouter>

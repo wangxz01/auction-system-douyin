@@ -16,6 +16,7 @@ export interface Auction {
   current_price: number
   current_price_cents: number
   duration_seconds: number
+  auto_extend_seconds: number
   status: AuctionStatus
   winner_id: number | null
   started_at: string | null
@@ -67,6 +68,11 @@ export interface MyBidEntry {
 }
 
 export interface MyOrderEntry {
+  order: Order
+  auction: Auction
+}
+
+export interface AdminOrderEntry {
   order: Order
   auction: Auction
 }

@@ -122,8 +122,13 @@ func PlaceBid(c *gin.Context) {
 		winnerID := uid
 		a.WinnerID = &winnerID
 
-		if a.EndsAt != nil && a.EndsAt.Sub(now) < autoExtendThreshold {
-			newEnds := now.Add(autoExtendThreshold)
+		extendSeconds := a.AutoExtendSeconds
+		if extendSeconds <= 0 {
+			extendSeconds = int(autoExtendThreshold / time.Second)
+		}
+		extendDuration := time.Duration(extendSeconds) * time.Second
+		if a.EndsAt != nil && a.EndsAt.Sub(now) < extendDuration {
+			newEnds := now.Add(extendDuration)
 			a.EndsAt = &newEnds
 		}
 

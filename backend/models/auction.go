@@ -18,6 +18,7 @@ type Auction struct {
 	CurrentPrice      float64    `gorm:"type:decimal(12,2);not null" json:"current_price"`
 	CurrentPriceCents int64      `gorm:"not null;default:0" json:"current_price_cents"`
 	DurationSeconds   int        `gorm:"not null" json:"duration_seconds"`
+	AutoExtendSeconds int        `gorm:"not null;default:30" json:"auto_extend_seconds"`
 	Status            string     `gorm:"size:16;not null;index" json:"status"`
 	WinnerID          *uint      `json:"winner_id"`
 	StartedAt         *time.Time `json:"started_at"`

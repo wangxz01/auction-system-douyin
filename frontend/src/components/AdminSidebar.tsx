@@ -14,6 +14,12 @@ const ITEMS = [
     label: '发布商品',
     match: (p: string) => p === '/admin/create',
   },
+  {
+    to: '/admin/orders',
+    icon: '🧾',
+    label: '订单管理',
+    match: (p: string) => p === '/admin/orders',
+  },
 ] as const
 
 export function AdminSidebar() {
