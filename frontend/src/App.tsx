@@ -6,22 +6,29 @@ import { AdminList } from './pages/AdminList'
 import { AdminCreate } from './pages/AdminCreate'
 import { Login } from './pages/Login'
 import { RequireAuth } from './components/RequireAuth'
+import { PhoneFrame } from './components/PhoneFrame'
+
+// 把用户端页面统一包进手机壳里（桌面端显示，移动端透明）
+const inPhone = (el: React.ReactNode) => <PhoneFrame>{el}</PhoneFrame>
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<UserHall />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/auction/:id" element={<AuctionDetail />} />
+        {/* 用户端：移动端设计，桌面端套手机壳 */}
+        <Route path="/" element={inPhone(<UserHall />)} />
+        <Route path="/login" element={inPhone(<Login />)} />
+        <Route path="/auction/:id" element={inPhone(<AuctionDetail />)} />
         <Route
           path="/auction/:id/order"
-          element={
+          element={inPhone(
             <RequireAuth>
               <OrderPage />
-            </RequireAuth>
-          }
+            </RequireAuth>,
+          )}
         />
+
+        {/* 商家端：PC 后台，宽屏布局 */}
         <Route
           path="/admin"
           element={

@@ -4,6 +4,23 @@
 
 ---
 
+## 🚪 两端入口（默认 dev 地址）
+
+| 端 | 适配 | 路由 | 说明 |
+|---|---|---|---|
+| **用户端**（消费者 / H5） | 移动端，桌面访问会自动套 iPhone 边框 | <http://localhost:5173/> | 拍卖大厅 |
+| 用户端 - 详情 | 同上 | `/auction/:id` | 实时出价 + 倒计时 + 排行 |
+| 用户端 - 订单 | 同上 | `/auction/:id/order` | 中标后查看 + 模拟支付（需登录） |
+| 用户端 - 登录 | 同上 | `/login` | 登录 / 注册切换 |
+| **商家端**（管理后台 / PC） | 宽屏 PC | <http://localhost:5173/admin> | 竞拍列表 + 开始/取消（需登录） |
+| 商家端 - 发布 | 同上 | `/admin/create` | 创建新竞拍 |
+
+> 用户端页面（`/`、`/login`、`/auction/:id`、`/auction/:id/order`）是按手机尺寸设计的。
+> 在桌面浏览器打开时，会自动套一个 iPhone 形状的边框（含灵动岛 + 状态栏），方便预览真机效果。
+> 浏览器窗口宽度 < 768px 时（真机或开发者工具切到移动模式），边框自动隐藏，恢复全屏布局。
+
+---
+
 ## 📌 当前进度
 
 ### ✅ 第一阶段：项目框架（已完成）
@@ -247,7 +264,8 @@ auction-system/
         ├── components/
         │   ├── StatusBadge.tsx
         │   ├── Countdown.tsx
-        │   └── RequireAuth.tsx    # 未登录跳 /login 的路由守卫
+        │   ├── RequireAuth.tsx    # 未登录跳 /login 的路由守卫
+        │   └── PhoneFrame.tsx     # 桌面端把用户端套进 iPhone 边框
         └── pages/
             ├── UserHall.tsx       # /
             ├── Login.tsx          # /login（登录/注册 tab）

@@ -226,3 +226,109 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(180, 130, 60, 0.4);
 }
+
+/* ============================================================
+   📱 PhoneFrame：仅 md+ 显示 iPhone 边框
+   移动端（<768px）所有 .phone-* 都没有样式，pass-through。
+   ============================================================ */
+
+@media (min-width: 768px) {
+  /* 桌面端把 body 背景换成中性灰，把暖色 mesh 留到手机屏内 */
+  body {
+    background: linear-gradient(135deg, #E8E8EA 0%, #D8D8DC 100%);
+    background-attachment: fixed;
+  }
+
+  .phone-wrap {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 2.5rem 1rem;
+  }
+
+  /* 手机外壳（金属边框 + 阴影） */
+  .phone-bezel {
+    width: 414px;
+    height: min(844px, calc(100vh - 5rem));
+    padding: 14px;
+    border-radius: 56px;
+    background: linear-gradient(135deg, #2c2c2e 0%, #1c1c1e 60%, #0a0a0c 100%);
+    position: relative;
+    box-shadow:
+      inset 0 0 0 1.5px rgba(255, 255, 255, 0.10),
+      inset 0 1px 2px rgba(255, 255, 255, 0.15),
+      0 40px 80px -10px rgba(0, 0, 0, 0.35),
+      0 15px 35px -5px rgba(0, 0, 0, 0.25);
+  }
+
+  /* 屏幕 */
+  .phone-screen {
+    width: 100%;
+    height: 100%;
+    border-radius: 44px;
+    overflow: hidden;
+    position: relative;
+    background:
+      radial-gradient(at 8% 0%,  hsla(40, 95%, 80%, 0.55) 0%, transparent 45%),
+      radial-gradient(at 92% 12%, hsla(20, 95%, 82%, 0.50) 0%, transparent 50%),
+      radial-gradient(at 50% 100%, hsla(48, 100%, 85%, 0.6) 0%, transparent 55%),
+      radial-gradient(at 75% 60%, hsla(340, 80%, 88%, 0.40) 0%, transparent 60%),
+      #faf7f2;
+  }
+
+  /* 灵动岛（Dynamic Island） */
+  .phone-screen::before {
+    content: '';
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 110px;
+    height: 32px;
+    background: #000;
+    border-radius: 999px;
+    z-index: 1000;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.06) inset,
+      0 2px 6px rgba(0, 0, 0, 0.4);
+  }
+
+  /* 顶部状态栏：时间 + 信号 */
+  .phone-screen::after {
+    content: '🕘 23:14   ●●●●● 5G';
+    position: absolute;
+    top: 18px;
+    left: 24px;
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(20, 20, 25, 0.85);
+    z-index: 999;
+    letter-spacing: 0.3px;
+  }
+
+  /* 屏幕内容容器（可滚动） */
+  .phone-content {
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-top: 50px; /* 给灵动岛留位置 */
+  }
+
+  /* 内部细滚动条 */
+  .phone-content::-webkit-scrollbar { width: 4px; }
+  .phone-content::-webkit-scrollbar-thumb {
+    background: rgba(180, 130, 60, 0.2);
+  }
+
+  /* 内部 min-h-screen 改成填满手机屏 */
+  .phone-content .min-h-screen {
+    min-height: calc(100% - 50px);
+  }
+
+  /* 内部 fixed bottom 元素：定位锚到手机屏而不是视口 */
+  .phone-content .fixed {
+    position: absolute;
+  }
+}
