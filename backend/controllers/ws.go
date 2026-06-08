@@ -54,7 +54,15 @@ func HandleWS(c *gin.Context) {
 		Conn:      conn,
 		Send:      make(chan []byte, 16),
 	}
-	ws.H.Register(client)
+	if !ws.H.Register(client) {
+		_ = conn.WriteControl(
+			websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseTryAgainLater, "too many websocket connections"),
+			time.Now().Add(writeWait),
+		)
+		_ = conn.Close()
+		return
+	}
 
 	go writePump(client)
 	go readPump(client)

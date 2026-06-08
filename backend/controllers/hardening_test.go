@@ -3,6 +3,7 @@ package controllers_test
 import (
 	"bytes"
 	"encoding/json"
+	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -349,6 +350,70 @@ func TestRapidDifferentClientBidIDIsRateLimited(t *testing.T) {
 	r.ServeHTTP(rec, req)
 	if rec.Code != http.StatusTooManyRequests {
 		t.Fatalf("second status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestLoginIsRateLimitedAfterRepeatedFailures(t *testing.T) {
+	r := setupCommentTest(t)
+	hash, err := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	u := models.User{Username: "login-rate-limited", PasswordHash: string(hash)}
+	if err := config.DB.Where("username = ?", u.Username).Delete(&models.User{}).Error; err != nil {
+		t.Fatalf("cleanup user: %v", err)
+	}
+	if err := config.DB.Create(&u).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	t.Cleanup(func() { config.DB.Delete(&models.User{}, u.ID) })
+
+	for i := 0; i < 5; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBufferString(`{"username":"login-rate-limited","password":"wrong"}`))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d status = %d, body = %s", i+1, rec.Code, rec.Body.String())
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBufferString(`{"username":"login-rate-limited","password":"wrong"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("rate limited status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestBidAboveSystemMaximumIsRejected(t *testing.T) {
+	r := setupCommentTest(t)
+	oldMax := config.Get().MaxBidAmountCents
+	config.Get().MaxBidAmountCents = 150
+	t.Cleanup(func() { config.Get().MaxBidAmountCents = oldMax })
+	bidder := createNamedUser(t, "bidder-max-amount")
+	a := createCommentTestAuction(t)
+	ends := time.Now().Add(time.Minute)
+	a.CurrentPrice = 0
+	a.StartPrice = 0
+	a.StartPriceCents = 0
+	a.CurrentPriceCents = 0
+	a.PriceStep = 1
+	a.PriceStepCents = 100
+	a.CeilingPrice = nil
+	a.CeilingPriceCents = nil
+	a.Status = "active"
+	a.EndsAt = &ends
+	if err := config.DB.Save(&a).Error; err != nil {
+		t.Fatalf("prepare auction: %v", err)
+	}
+
+	req := authReq(t, http.MethodPost, "/api/auctions/"+uintString(a.ID)+"/bids", `{"amount_cents":200,"client_bid_id":"too-high-system"}`, bidder)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
 }
 

@@ -141,6 +141,11 @@ func PlaceBid(c *gin.Context) {
 			response = gin.H{"error": "出价金额必须大于 0"}
 			return handled
 		}
+		if max := config.Get().MaxBidAmountCents; max > 0 && amountCents > max {
+			status = http.StatusBadRequest
+			response = gin.H{"error": fmt.Sprintf("出价金额不能超过系统上限 %.2f", centsToFloat(max))}
+			return handled
+		}
 		delta := amountCents - currentCents
 		if delta <= 0 {
 			status = http.StatusBadRequest

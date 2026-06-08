@@ -579,9 +579,12 @@ JWT_SECRET=replace-with-a-long-random-string
 JWT_EXPIRE_HOURS=72
 ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 ADMIN_USERNAMES=admin
+MAX_BID_AMOUNT_CENTS=100000000
+WS_MAX_CONNECTIONS=1000
 ```
 
 > `SERVER_MODE=release` 时必须显式配置 `JWT_SECRET` 和 `ALLOWED_ORIGINS`，且 `ALLOWED_ORIGINS` 不能为 `*`。
+> `MAX_BID_AMOUNT_CENTS` 是系统级单笔出价上限，`WS_MAX_CONNECTIONS` 是单后端进程 WebSocket 最大连接数。
 
 ### 超级管理员账号
 
@@ -640,9 +643,13 @@ VITE_API_BASE=http://localhost:8080
 | 读写分离 | 读路径优先 Redis 短 TTL 缓存；写路径只写 MySQL 并失效缓存 |
 | 防缓存击穿 | 高频读接口 TTL 很短（统计 1s，列表/详情 2s），实时状态主要靠 WebSocket 推送 |
 | 房间隔离 | WebSocket Hub 按 `auction_id` 分房间，只向对应直播间广播 |
+| 连接保护 | `WS_MAX_CONNECTIONS` 限制单后端进程最大 WebSocket 连接数，慢客户端发送缓冲满会被剔除 |
 | 断连重连 | 前端 `AuctionWS` 自动重连 5 次，每次间隔 3s；重连成功后用 HTTP 重新拉取详情、统计和评论 |
 | 毫秒倒计时 | `new_bid` / `auction_started` 带 `server_time`，前端按服务器时间校准后 100ms 刷新 |
 | 防抖节流 | 前端出价按钮有提交态 + 700ms 点击间隔保护，后端同一用户同一竞拍 700ms 兜底限流 |
+| 登录保护 | 登录失败 5 次后 1 分钟内返回 429，降低暴力破解风险 |
+| 金额保护 | 单笔出价先校验系统级 `MAX_BID_AMOUNT_CENTS`，再校验商品封顶价 |
+| 压测证明 | `docs/performance.md` 已记录本地 100 VU、300 VU 和 Redis 降级压测结果 |
 | 可观测性 | 健康检查 + `/api/admin/metrics` + 关键路径日志 + 测试覆盖；生产级告警面板属于后续部署阶段 |
 
 ### 用户端功能验收
@@ -690,6 +697,7 @@ A: 后端 `.env` 改完要重启 `go run`；前端 `.env` 改完要重启 `npm r
 
 ## 📅 更新记录
 
+- **2026-06-09** — 补齐上线前安全与压测证据：登录失败限流、WebSocket 最大连接数、系统级出价上限、k6 多用户压测脚本和 100/300 VU 实测结果
 - **2026-06-09** — 补齐生产部署准备：后端/前端 Dockerfile、生产 Compose、Nginx HTTPS 反代模板、生产环境变量模板和部署文档
 - **2026-06-09** — 补齐评审材料和可证明性：演示脚本、方案文档、AI 使用文档、压测脚本、WebSocket 重连补偿、metrics 接口和后端出价限流
 - **2026-06-09** — 补齐用户端竞价体验与高并发重点：0 元起拍、10-30 秒延时、出价幂等、Redis 锁/缓存、毫秒倒计时、实时参与人数和 AI 使用说明

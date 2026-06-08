@@ -3,6 +3,8 @@ package controllers
 import (
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"auction-system/backend/config"
 	"auction-system/backend/middleware"
@@ -23,6 +25,21 @@ type authResp struct {
 	Username string `json:"username"`
 	Token    string `json:"token"`
 }
+
+const (
+	loginFailureWindow = time.Minute
+	loginFailureLimit  = 5
+)
+
+type loginFailureBucket struct {
+	Count     int
+	FirstSeen time.Time
+}
+
+var loginFailures = struct {
+	sync.Mutex
+	items map[string]loginFailureBucket
+}{items: make(map[string]loginFailureBucket)}
 
 func Register(c *gin.Context) {
 	var req authReq
@@ -76,21 +93,66 @@ func Login(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
 		return
 	}
+	req.Username = strings.TrimSpace(req.Username)
+	key := loginFailureKey(c, req.Username)
+	if isLoginRateLimited(key, time.Now()) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "登录失败次数过多，请稍后再试"})
+		return
+	}
 	var u models.User
 	if err := config.DB.Where("username = ?", req.Username).First(&u).Error; err != nil {
+		recordLoginFailure(key, time.Now())
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "用户名或密码错误"})
 		return
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(req.Password)); err != nil {
+		recordLoginFailure(key, time.Now())
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "用户名或密码错误"})
 		return
 	}
+	clearLoginFailures(key)
 	token, err := middleware.IssueToken(u.ID, u.Username)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "签发 token 失败"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": authResp{UserID: u.ID, Username: u.Username, Token: token}})
+}
+
+func loginFailureKey(c *gin.Context, username string) string {
+	return c.ClientIP() + ":" + strings.ToLower(strings.TrimSpace(username))
+}
+
+func isLoginRateLimited(key string, now time.Time) bool {
+	loginFailures.Lock()
+	defer loginFailures.Unlock()
+	b, ok := loginFailures.items[key]
+	if !ok {
+		return false
+	}
+	if now.Sub(b.FirstSeen) > loginFailureWindow {
+		delete(loginFailures.items, key)
+		return false
+	}
+	return b.Count >= loginFailureLimit
+}
+
+func recordLoginFailure(key string, now time.Time) {
+	loginFailures.Lock()
+	defer loginFailures.Unlock()
+	b, ok := loginFailures.items[key]
+	if !ok || now.Sub(b.FirstSeen) > loginFailureWindow {
+		loginFailures.items[key] = loginFailureBucket{Count: 1, FirstSeen: now}
+		return
+	}
+	b.Count++
+	loginFailures.items[key] = b
+}
+
+func clearLoginFailures(key string) {
+	loginFailures.Lock()
+	defer loginFailures.Unlock()
+	delete(loginFailures.items, key)
 }
 
 // Me 返回当前登录用户信息（需 RequireAuth 中间件）。

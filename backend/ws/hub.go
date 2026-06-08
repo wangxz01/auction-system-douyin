@@ -21,6 +21,11 @@ type roomEvent struct {
 	payload   []byte
 }
 
+type registerReq struct {
+	client *Client
+	accept chan bool
+}
+
 type Metrics struct {
 	ActiveRooms       int `json:"active_rooms"`
 	OnlineConnections int `json:"online_ws_connections"`
@@ -29,23 +34,29 @@ type Metrics struct {
 // Hub 维护所有按 auction_id 分组的客户端连接，并通过 channel 串行化所有操作，
 // 避免并发读写 map 引发 panic。
 type Hub struct {
-	rooms      map[uint]map[*Client]bool
-	register   chan *Client
-	unregister chan *Client
-	broadcast  chan roomEvent
-	metrics    chan chan Metrics
+	rooms          map[uint]map[*Client]bool
+	register       chan registerReq
+	unregister     chan *Client
+	broadcast      chan roomEvent
+	metrics        chan chan Metrics
+	maxConnections int
 }
 
 // H 是全局 Hub 实例。main 启动时调 InitHub() 初始化。
 var H *Hub
 
-func InitHub() {
+func InitHub(maxConnections ...int) {
+	limit := 0
+	if len(maxConnections) > 0 {
+		limit = maxConnections[0]
+	}
 	H = &Hub{
-		rooms:      make(map[uint]map[*Client]bool),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
-		broadcast:  make(chan roomEvent, 256),
-		metrics:    make(chan chan Metrics),
+		rooms:          make(map[uint]map[*Client]bool),
+		register:       make(chan registerReq),
+		unregister:     make(chan *Client),
+		broadcast:      make(chan roomEvent, 256),
+		metrics:        make(chan chan Metrics),
+		maxConnections: limit,
 	}
 	go H.run()
 	log.Println("✅ WebSocket Hub 已启动")
@@ -54,11 +65,18 @@ func InitHub() {
 func (h *Hub) run() {
 	for {
 		select {
-		case c := <-h.register:
+		case req := <-h.register:
+			c := req.client
+			if h.maxConnections > 0 && h.onlineConnections() >= h.maxConnections {
+				req.accept <- false
+				log.Printf("📡 WS 连接数已达上限 max=%d，拒绝 auction=%d", h.maxConnections, c.AuctionID)
+				continue
+			}
 			if _, ok := h.rooms[c.AuctionID]; !ok {
 				h.rooms[c.AuctionID] = make(map[*Client]bool)
 			}
 			h.rooms[c.AuctionID][c] = true
+			req.accept <- true
 			log.Printf("📡 客户端加入房间 auction=%d，房间人数=%d", c.AuctionID, len(h.rooms[c.AuctionID]))
 
 		case c := <-h.unregister:
@@ -88,16 +106,20 @@ func (h *Hub) run() {
 				}
 			}
 		case reply := <-h.metrics:
-			m := Metrics{ActiveRooms: len(h.rooms)}
-			for _, room := range h.rooms {
-				m.OnlineConnections += len(room)
-			}
+			m := Metrics{ActiveRooms: len(h.rooms), OnlineConnections: h.onlineConnections()}
 			reply <- m
 		}
 	}
 }
 
-func (h *Hub) Register(c *Client)   { h.register <- c }
+func (h *Hub) Register(c *Client) bool {
+	if h == nil {
+		return false
+	}
+	reply := make(chan bool, 1)
+	h.register <- registerReq{client: c, accept: reply}
+	return <-reply
+}
 func (h *Hub) Unregister(c *Client) { h.unregister <- c }
 func (h *Hub) Metrics() Metrics {
 	if h == nil {
@@ -106,6 +128,14 @@ func (h *Hub) Metrics() Metrics {
 	reply := make(chan Metrics, 1)
 	h.metrics <- reply
 	return <-reply
+}
+
+func (h *Hub) onlineConnections() int {
+	total := 0
+	for _, room := range h.rooms {
+		total += len(room)
+	}
+	return total
 }
 
 // Broadcast 把 msg 序列化为 JSON 并推送到指定房间。

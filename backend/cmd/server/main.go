@@ -19,7 +19,7 @@ func main() {
 
 	config.InitDB(cfg)
 	config.InitRedis(cfg)
-	ws.InitHub()
+	ws.InitHub(cfg.MaxWSConnections)
 	config.StartScheduler()
 
 	gin.SetMode(cfg.ServerMode)

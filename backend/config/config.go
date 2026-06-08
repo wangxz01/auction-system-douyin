@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/joho/godotenv"
@@ -29,6 +30,9 @@ type Config struct {
 
 	AllowedOrigins []string
 	AdminUsernames []string
+
+	MaxBidAmountCents int64
+	MaxWSConnections  int
 }
 
 var active *Config
@@ -54,6 +58,9 @@ func Load() *Config {
 		JWTExpireHours: getEnv("JWT_EXPIRE_HOURS", "72"),
 		AllowedOrigins: splitCSV(getEnv("ALLOWED_ORIGINS", "")),
 		AdminUsernames: splitCSV(getEnv("ADMIN_USERNAMES", "")),
+
+		MaxBidAmountCents: getEnvInt64("MAX_BID_AMOUNT_CENTS", 100000000),
+		MaxWSConnections:  getEnvInt("WS_MAX_CONNECTIONS", 1000),
 	}
 	if cfg.ServerMode != "release" && cfg.JWTSecret == "" {
 		cfg.JWTSecret = "dev-only-do-not-use-in-prod"
@@ -99,6 +106,30 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func getEnvInt(key string, fallback int) int {
+	raw := getEnv(key, "")
+	if raw == "" {
+		return fallback
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil {
+		return fallback
+	}
+	return v
+}
+
+func getEnvInt64(key string, fallback int64) int64 {
+	raw := getEnv(key, "")
+	if raw == "" {
+		return fallback
+	}
+	v, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return fallback
+	}
+	return v
 }
 
 func splitCSV(raw string) []string {
