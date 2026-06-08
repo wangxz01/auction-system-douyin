@@ -3,6 +3,8 @@ import { UserHall } from './pages/UserHall'
 import { AuctionDetail } from './pages/AuctionDetail'
 import { OrderPage } from './pages/OrderPage'
 import { Me } from './pages/Me'
+import { MyBids } from './pages/MyBids'
+import { MyOrders } from './pages/MyOrders'
 import { AdminList } from './pages/AdminList'
 import { AdminCreate } from './pages/AdminCreate'
 import { AdminAuctionDetail } from './pages/AdminAuctionDetail'
@@ -26,6 +28,22 @@ export default function App() {
         {/* 用户端：移动端设计，桌面端套手机壳 */}
         <Route path="/" element={inPhone(<UserHall />)} />
         <Route path="/me" element={inPhone(<Me />)} />
+        <Route
+          path="/me/bids"
+          element={inPhone(
+            <RequireAuth>
+              <MyBids />
+            </RequireAuth>,
+          )}
+        />
+        <Route
+          path="/me/orders"
+          element={inPhone(
+            <RequireAuth>
+              <MyOrders />
+            </RequireAuth>,
+          )}
+        />
         <Route path="/login" element={inPhone(<Login />)} />
         <Route path="/auction/:id" element={inPhone(<AuctionDetail />)} />
         <Route

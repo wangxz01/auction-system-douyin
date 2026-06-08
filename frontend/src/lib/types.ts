@@ -41,6 +41,18 @@ export interface TopBid {
   amount: number
 }
 
+export interface MyBidEntry {
+  auction: Auction
+  my_highest_bid: number
+  my_bid_count: number
+  is_leading: boolean
+}
+
+export interface MyOrderEntry {
+  order: Order
+  auction: Auction
+}
+
 export type WSMessage =
   | { type: 'auction_started'; auction_id: number; ends_at: string }
   | {

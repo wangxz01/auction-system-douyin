@@ -63,15 +63,25 @@ export function Me() {
       {/* 拍卖记录分组 */}
       <div className="ios-section-header mt-6">拍卖</div>
       <div className="ios-list">
-        <button className="ios-list-item" disabled>
+        <button
+          className="ios-list-item ios-list-item-chevron"
+          onClick={() => {
+            if (!me) return nav('/login?from=/me/bids')
+            nav('/me/bids')
+          }}
+        >
           <span className="text-xl w-7 text-center">📜</span>
           <span className="flex-1">我的拍卖记录</span>
-          <span className="text-xs text-[#8E8E93]">开发中</span>
         </button>
-        <button className="ios-list-item" disabled>
+        <button
+          className="ios-list-item ios-list-item-chevron"
+          onClick={() => {
+            if (!me) return nav('/login?from=/me/orders')
+            nav('/me/orders')
+          }}
+        >
           <span className="text-xl w-7 text-center">📋</span>
           <span className="flex-1">我的订单</span>
-          <span className="text-xs text-[#8E8E93]">开发中</span>
         </button>
       </div>
 

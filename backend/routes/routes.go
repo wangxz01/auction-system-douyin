@@ -42,6 +42,10 @@ func Register(r *gin.Engine) {
 			auth.POST("/auctions/:id/start", controllers.StartAuction)
 			auth.POST("/auctions/:id/cancel", controllers.CancelAuction)
 			auth.POST("/auctions/:id/bids", controllers.PlaceBid)
+
+			// 当前用户的聚合数据
+			auth.GET("/me/bids", controllers.GetMyBids)
+			auth.GET("/me/orders", controllers.GetMyOrders)
 		}
 	}
 }
