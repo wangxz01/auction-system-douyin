@@ -28,11 +28,8 @@ export function AdminSidebar() {
         🏷️
       </div>
 
-      {/* 上半 spacer，让导航项垂直居中 */}
-      <div className="admin-sidebar-spacer" />
-
-      {/* 导航 */}
-      <nav className="flex flex-col gap-2">
+      {/* 导航 紧贴 brand 下方 */}
+      <nav className="flex flex-col gap-2 mt-2">
         {ITEMS.map((it) => {
           const active = it.match(pathname)
           return (
@@ -48,7 +45,7 @@ export function AdminSidebar() {
         })}
       </nav>
 
-      {/* 下半 spacer */}
+      {/* 撑开，把账号推到底部 */}
       <div className="admin-sidebar-spacer" />
 
       {/* 账号 + 退出 */}
