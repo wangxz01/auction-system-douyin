@@ -272,19 +272,24 @@ body {
   border-radius: 14px;
 }
 
-/* 抖音红 #FE2C55 主按钮 */
-.btn-douyin {
-  background: linear-gradient(135deg, #FF4567 0%, #FE2C55 100%);
-  color: white;
+/* 直播间字体按钮：纯文字 + 阴影，避免遮挡视频 */
+.live-text-btn {
+  background: transparent;
+  border: none;
   font-weight: 700;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    0 4px 18px rgba(254, 44, 85, 0.45);
-  transition: transform 0.12s ease;
+  padding: 6px 10px;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.75);
+  transition: opacity 0.12s ease, transform 0.12s ease;
 }
-.btn-douyin:active:not(:disabled) { transform: scale(0.96); }
-.btn-douyin:disabled { opacity: 0.6; cursor: not-allowed; }
+.live-text-btn:active:not(:disabled) { transform: scale(0.94); opacity: 0.7; }
+.live-text-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.live-text-btn.gold   { color: #FFD451; }
+.live-text-btn.white  { color: rgba(255, 255, 255, 0.95); }
+.live-text-btn.muted  { color: rgba(255, 255, 255, 0.55); }
+
+.live-text-shadow {
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.75);
+}
 
 /* 倒计时胶囊 */
 .countdown-pill {

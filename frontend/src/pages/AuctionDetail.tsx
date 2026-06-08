@@ -53,6 +53,11 @@ export function AuctionDetail() {
   // 'cover' = 充满（竖屏/方形适用）；'contain' = 保留完整画面（横屏适用）
   const [fitMode, setFitMode] = useState<'cover' | 'contain'>('cover')
 
+  // 出价金额：默认 = 当前价 + 1×加价幅度；用户可点快捷倍数或自定义改写
+  const [bidAmount, setBidAmount] = useState(0)
+  const [showCustomModal, setShowCustomModal] = useState(false)
+  const [customInput, setCustomInput] = useState('')
+
   // 视频源加载策略：HLS → 原生 HLS → 兜底本地
   useEffect(() => {
     if (!auction) return
@@ -214,10 +219,28 @@ export function AuctionDetail() {
     setToast({ kind, text, id: toastIdRef.current })
   }
 
-  const nextBidAmount = useMemo(
+  // 最小出价 = 当前价 + 1×加价幅度
+  const minBid = useMemo(
     () => (auction ? auction.current_price + auction.price_step : 0),
-    [auction],
+    [auction?.current_price, auction?.price_step], // eslint-disable-line react-hooks/exhaustive-deps
   )
+
+  // 当前价 / 加价幅度变动 → 出价金额若过低（被超越或首次加载）自动重置为最小出价
+  useEffect(() => {
+    if (!auction) return
+    if (bidAmount < minBid) setBidAmount(minBid)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [minBid])
+
+  // 是否命中某个快捷倍数（用于高亮）
+  const matchedMultiplier = useMemo(() => {
+    if (!auction) return 0
+    const delta = bidAmount - auction.current_price
+    if (delta <= 0) return 0
+    const m = delta / auction.price_step
+    if (Math.abs(m - Math.round(m)) > 0.001) return 0
+    return Math.round(m)
+  }, [bidAmount, auction?.current_price, auction?.price_step]) // eslint-disable-line
 
   // 假在线人数（确定性，基于 auctionId）
   const viewers = useMemo(() => ((auctionId * 137) % 800) + 120 + bidCount * 3, [auctionId, bidCount])
@@ -231,7 +254,7 @@ export function AuctionDetail() {
     }
     setSubmitting(true)
     try {
-      await api.post(`/auctions/${auctionId}/bids`, { amount: nextBidAmount })
+      await api.post(`/auctions/${auctionId}/bids`, { amount: bidAmount })
       hasBidRef.current = true
     } catch (e: unknown) {
       const r = (e as { response?: { data?: { error?: string } } }).response
@@ -239,6 +262,23 @@ export function AuctionDetail() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const confirmCustom = () => {
+    const v = Number(customInput)
+    if (!isFinite(v) || v < minBid) {
+      alert(`金额无效，最低出价 ¥${minBid}`)
+      return
+    }
+    if (auction) {
+      const delta = v - auction.current_price
+      if (Math.abs(delta / auction.price_step - Math.round(delta / auction.price_step)) > 0.001) {
+        alert(`金额必须为 ¥${auction.price_step} 的整数倍`)
+        return
+      }
+    }
+    setBidAmount(v)
+    setShowCustomModal(false)
   }
 
   if (!auction) {
@@ -330,7 +370,7 @@ export function AuctionDetail() {
             <span>👥 {viewers} 人在看</span>
           </div>
         </div>
-        <button className="px-3.5 py-1.5 bg-[#FE2C55] text-white text-xs font-semibold rounded-full shadow-lg shrink-0">
+        <button className="live-text-btn white text-sm">
           + 关注
         </button>
       </div>
@@ -427,21 +467,54 @@ export function AuctionDetail() {
         </div>
       </div>
 
-      {/* 底部出价栏 */}
+      {/* 加价倍数快捷选择 */}
       {auction.status === 'active' && (
-        <div className="absolute left-0 right-0 bottom-0 z-10 px-3 pt-2 flex items-center gap-2" style={{ paddingBottom: 'calc(12px + env(safe-area-inset-bottom))' }}>
-          <div className="flex-1 h-9 bg-white/15 backdrop-blur rounded-full px-4 text-white/60 text-xs flex items-center" style={{ border: '1px solid rgba(255,255,255,0.15)' }}>
+        <div
+          className="absolute left-0 right-0 z-10 px-4 flex items-center gap-5 text-sm whitespace-nowrap overflow-x-auto"
+          style={{ bottom: 'calc(48px + env(safe-area-inset-bottom))' }}
+        >
+          {[1, 2, 5, 10].map((m) => {
+            const selected = matchedMultiplier === m
+            return (
+              <button
+                key={m}
+                onClick={() => setBidAmount(auction.current_price + m * auction.price_step)}
+                className={`live-text-btn ${selected ? 'gold' : 'muted'}`}
+              >
+                +¥{(m * auction.price_step).toLocaleString()}
+              </button>
+            )
+          })}
+          <button
+            onClick={() => {
+              setCustomInput(String(minBid))
+              setShowCustomModal(true)
+            }}
+            className={`live-text-btn ${matchedMultiplier === 0 || ![1, 2, 5, 10].includes(matchedMultiplier) ? 'gold' : 'white'}`}
+          >
+            自定义
+          </button>
+        </div>
+      )}
+
+      {/* 底部出价栏 —— 全字体风格 */}
+      {auction.status === 'active' && (
+        <div
+          className="absolute left-0 right-0 bottom-0 z-10 px-4 pt-2 flex items-center gap-3"
+          style={{ paddingBottom: 'calc(10px + env(safe-area-inset-bottom))' }}
+        >
+          <div className="flex-1 text-white/55 text-sm live-text-shadow truncate">
             说点什么...
           </div>
           <button
             onClick={handleBid}
             disabled={submitting}
-            className="btn-douyin h-9 px-4 rounded-full text-sm whitespace-nowrap"
+            className="live-text-btn gold text-base"
           >
             {submitting
               ? '出价中...'
               : isLoggedIn()
-              ? `出价 ¥${nextBidAmount}`
+              ? `出价 ¥${bidAmount.toLocaleString()}`
               : `登录出价`}
           </button>
         </div>
@@ -449,6 +522,50 @@ export function AuctionDetail() {
       {auction.status === 'pending' && !finished && !cancelled && (
         <div className="absolute left-0 right-0 bottom-0 z-10 px-3 pb-5 pt-2 text-center text-white/80 text-sm bg-black/40 backdrop-blur">
           竞拍尚未开始，敬请期待
+        </div>
+      )}
+
+      {/* 自定义金额 bottom sheet */}
+      {showCustomModal && auction && (
+        <div
+          className="absolute inset-0 z-40 bg-black/60 flex items-end backdrop-blur-sm"
+          onClick={() => setShowCustomModal(false)}
+        >
+          <div
+            className="w-full p-6 rounded-t-3xl"
+            style={{
+              background: 'rgba(28, 28, 30, 0.95)',
+              paddingBottom: 'calc(24px + env(safe-area-inset-bottom))',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-white text-base font-semibold mb-1">自定义出价</div>
+            <div className="text-white/55 text-xs mb-4">
+              最低 ¥{minBid.toLocaleString()}，必须为 ¥{auction.price_step} 的整数倍
+            </div>
+            <input
+              type="number"
+              value={customInput}
+              onChange={(e) => setCustomInput(e.target.value)}
+              placeholder={String(minBid)}
+              autoFocus
+              step={auction.price_step}
+              min={minBid}
+              className="w-full bg-white/10 text-white text-2xl font-bold px-4 py-3 rounded-xl mb-5 outline-none"
+              style={{ border: '1px solid rgba(255,255,255,0.15)' }}
+            />
+            <div className="flex items-center justify-around">
+              <button
+                onClick={() => setShowCustomModal(false)}
+                className="live-text-btn muted text-base"
+              >
+                取消
+              </button>
+              <button onClick={confirmCustom} className="live-text-btn gold text-base">
+                确认
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
