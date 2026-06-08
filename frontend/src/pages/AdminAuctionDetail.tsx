@@ -58,10 +58,10 @@ export function AdminAuctionDetail() {
   }
 
   if (loading)
-    return <div className="p-12 text-center text-ink-400">加载中...</div>
+    return <div className="p-12 text-center text-[#8E8E93]">加载中...</div>
   if (error)
     return (
-      <div className="p-12 text-center text-rose-500">
+      <div className="p-12 text-center text-[#FF3B30]">
         {error}
         <div className="mt-4">
           <button onClick={() => nav('/admin')} className="btn-default px-4 py-2 rounded-full text-sm">
@@ -73,21 +73,18 @@ export function AdminAuctionDetail() {
   if (!auction) return null
 
   return (
-    <div className="max-w-5xl mx-auto px-8 py-8">
-      {/* 标题栏 */}
-      <div className="flex items-center justify-between mb-6">
+    <div className="max-w-4xl mx-auto px-8 py-8">
+      <Link to="/admin" className="text-xs text-[#FF9500] mb-2 inline-block">
+        ← 返回列表
+      </Link>
+
+      <div className="admin-page-header">
         <div>
-          <Link
-            to="/admin"
-            className="text-xs text-ink-400 hover:text-ink-700"
-          >
-            ← 返回列表
-          </Link>
-          <div className="flex items-baseline gap-3 mt-1">
-            <h1 className="text-2xl font-bold tracking-tight">{auction.title}</h1>
+          <div className="flex items-baseline gap-3">
+            <h1 className="ios-large-title">{auction.title}</h1>
             <StatusBadge status={auction.status} />
-            <span className="text-xs text-ink-400">#{auction.id}</span>
           </div>
+          <p className="text-sm text-[#8E8E93] mt-1">竞拍 #{auction.id}</p>
         </div>
 
         <div className="flex gap-2">
@@ -103,145 +100,134 @@ export function AdminAuctionDetail() {
           )}
           {auction.status === 'active' && (
             <button onClick={onCancel} className="btn-danger px-5 py-2 rounded-full text-sm">
-              强制取消竞拍
+              强制取消
             </button>
           )}
           {(auction.status === 'finished' || auction.status === 'cancelled') && (
-            <span className="text-ink-400 text-sm self-center">竞拍已结束，无操作</span>
+            <span className="text-[#8E8E93] text-sm self-center">竞拍已结束</span>
           )}
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        {/* 商品信息 */}
-        <div className="card col-span-2 p-6">
-          <h2 className="text-sm font-semibold text-ink-700 mb-4">📦 商品信息</h2>
-          <div className="grid grid-cols-2 gap-4">
-            {auction.image_url ? (
-              <img
-                src={auction.image_url}
-                alt={auction.title}
-                className="w-full h-40 object-cover rounded-xl bg-app-100"
-                onError={(e) => {
-                  ;(e.currentTarget as HTMLImageElement).style.display = 'none'
-                }}
-              />
-            ) : (
-              <div className="w-full h-40 bg-app-100 rounded-xl flex items-center justify-center text-4xl">
-                📦
-              </div>
-            )}
-            <div className="space-y-2">
-              <Info label="商品名称" value={auction.title} />
-              <Info label="图片 URL" value={auction.image_url || '—'} mono />
-            </div>
-          </div>
-          {auction.description && (
-            <div className="mt-4">
-              <div className="text-xs text-ink-500 mb-1">商品描述</div>
-              <div className="text-sm leading-relaxed text-ink-800 whitespace-pre-line">
-                {auction.description}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* 价格规则 */}
-        <div className="card p-6">
-          <h2 className="text-sm font-semibold text-ink-700 mb-4">💰 价格规则</h2>
-          <div className="space-y-2">
-            <Info label="起拍价" value={`¥${auction.start_price}`} />
-            <Info label="加价幅度" value={`¥${auction.price_step}`} />
-            <Info
-              label="封顶价"
-              value={auction.ceiling_price ? `¥${auction.ceiling_price}` : '无封顶'}
-            />
-            <Info label="持续时长" value={`${auction.duration_seconds} 秒`} />
-            <div className="pt-2 mt-2 border-t border-app-200">
-              <Info
-                label="当前最高价"
-                value={
-                  <span className="text-accent-600 text-xl font-bold">
-                    ¥{auction.current_price}
-                  </span>
-                }
-              />
-              <Info
-                label="领先者"
-                value={auction.winner_id ? `UID ${auction.winner_id}` : '尚无'}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* 时间 */}
-        <div className="card col-span-3 p-6">
-          <h2 className="text-sm font-semibold text-ink-700 mb-4">⏱ 时间</h2>
-          <div className="grid grid-cols-3 gap-6">
-            <Info label="创建于" value={fmt(auction.created_at)} />
-            <Info label="开始于" value={fmt(auction.started_at)} />
-            <Info label="结束于" value={fmt(auction.ends_at)} />
-          </div>
-        </div>
-
-        {/* 出价历史 */}
-        <div className="card col-span-2 p-6">
-          <h2 className="text-sm font-semibold text-ink-700 mb-4">
-            📊 出价历史 <span className="text-ink-400 font-normal">({bids.length} 条)</span>
-          </h2>
-          {bids.length === 0 ? (
-            <div className="text-center text-ink-400 py-8 text-sm">还没有出价</div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="text-ink-500">
-                <tr>
-                  <th className="text-left py-2 font-medium">排名</th>
-                  <th className="text-left py-2 font-medium">UID</th>
-                  <th className="text-right py-2 font-medium">金额</th>
-                </tr>
-              </thead>
-              <tbody>
-                {bids.slice(0, 20).map((b, i) => (
-                  <tr key={b.id} className="border-t border-app-100">
-                    <td className="py-2 text-ink-500">#{i + 1}</td>
-                    <td className="py-2">UID {b.user_id}</td>
-                    <td className="py-2 text-right font-semibold">¥{b.amount}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        {/* 订单 */}
-        <div className="card p-6">
-          <h2 className="text-sm font-semibold text-ink-700 mb-4">🧾 订单</h2>
-          {order ? (
-            <div className="space-y-2">
-              <Info label="订单号" value={`#${order.id}`} mono />
-              <Info label="买家" value={`UID ${order.user_id}`} />
-              <Info
-                label="成交价"
-                value={<span className="text-accent-600 font-bold">¥{order.final_price}</span>}
-              />
-              <Info label="状态" value={order.status} />
-            </div>
-          ) : (
-            <div className="text-center text-ink-400 py-8 text-sm">
-              {auction.status === 'finished' ? '订单尚未生成或加载失败' : '竞拍结束后会自动生成订单'}
-            </div>
-          )}
+      {/* 商品信息 */}
+      <div className="ios-section-header" style={{ padding: '0 4px 8px' }}>商品信息</div>
+      <div className="bg-white rounded-2xl overflow-hidden">
+        {auction.image_url && (
+          <img
+            src={auction.image_url}
+            alt={auction.title}
+            className="w-full h-56 object-cover bg-[#F2F2F7]"
+            onError={(e) => {
+              ;(e.currentTarget as HTMLImageElement).style.display = 'none'
+            }}
+          />
+        )}
+        <div className="ios-list ios-list-flush">
+          <Row label="名称" value={auction.title} />
+          <Row label="图片 URL" value={auction.image_url || '—'} mono />
+          {auction.description && <Row label="描述" value={auction.description} multiline />}
         </div>
       </div>
+
+      {/* 价格规则 */}
+      <div className="ios-section-header mt-6" style={{ padding: '0 4px 8px' }}>价格规则</div>
+      <div className="ios-list ios-list-flush">
+        <Row label="起拍价" value={`¥${auction.start_price}`} />
+        <Row label="加价幅度" value={`¥${auction.price_step}`} />
+        <Row
+          label="封顶价"
+          value={auction.ceiling_price ? `¥${auction.ceiling_price}` : '无封顶'}
+        />
+        <Row label="持续时长" value={`${auction.duration_seconds} 秒`} />
+        <Row
+          label="当前最高价"
+          value={
+            <span className="text-[#FF9500] text-base font-bold">¥{auction.current_price}</span>
+          }
+        />
+        <Row label="领先者" value={auction.winner_id ? `UID ${auction.winner_id}` : '尚无'} />
+      </div>
+
+      {/* 时间 */}
+      <div className="ios-section-header mt-6" style={{ padding: '0 4px 8px' }}>时间</div>
+      <div className="ios-list ios-list-flush">
+        <Row label="创建于" value={fmt(auction.created_at)} mono />
+        <Row label="开始于" value={fmt(auction.started_at)} mono />
+        <Row label="结束于" value={fmt(auction.ends_at)} mono />
+      </div>
+
+      {/* 出价历史 */}
+      <div className="ios-section-header mt-6" style={{ padding: '0 4px 8px' }}>
+        <span>出价历史</span>
+        <span className="text-[#8E8E93]">{bids.length} 条</span>
+      </div>
+      {bids.length === 0 ? (
+        <div className="bg-white rounded-2xl p-10 text-center text-[#8E8E93] text-sm">
+          还没有出价
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl overflow-hidden">
+          {bids.slice(0, 30).map((b, i) => (
+            <div
+              key={b.id}
+              className="ios-list-item"
+              style={{ borderTop: i === 0 ? 'none' : undefined }}
+            >
+              <span className="w-8 text-xs text-[#8E8E93]">#{i + 1}</span>
+              <span className="flex-1 text-[15px]">UID {b.user_id}</span>
+              <span className="font-semibold">¥{b.amount}</span>
+              <span className="text-xs text-[#8E8E93] w-32 text-right">
+                {fmt(b.created_at)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 订单 */}
+      <div className="ios-section-header mt-6" style={{ padding: '0 4px 8px' }}>订单</div>
+      {order ? (
+        <div className="ios-list ios-list-flush">
+          <Row label="订单号" value={`#${order.id}`} mono />
+          <Row label="买家" value={`UID ${order.user_id}`} />
+          <Row
+            label="成交价"
+            value={
+              <span className="text-[#FF9500] text-base font-bold">¥{order.final_price}</span>
+            }
+          />
+          <Row label="状态" value={order.status} />
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl p-10 text-center text-[#8E8E93] text-sm">
+          {auction.status === 'finished'
+            ? '订单尚未生成或加载失败'
+            : '竞拍结束后会自动生成订单'}
+        </div>
+      )}
     </div>
   )
 }
 
-function Info({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
+function Row({
+  label,
+  value,
+  mono,
+  multiline,
+}: {
+  label: string
+  value: React.ReactNode
+  mono?: boolean
+  multiline?: boolean
+}) {
   return (
-    <div className="flex justify-between items-baseline gap-3">
-      <span className="text-xs text-ink-500 shrink-0">{label}</span>
-      <span className={`text-sm text-ink-800 text-right truncate ${mono ? 'font-mono' : ''}`}>
+    <div className="ios-list-item" style={multiline ? { alignItems: 'flex-start', paddingTop: 14, paddingBottom: 14 } : undefined}>
+      <span className="text-[#000] w-28 shrink-0 text-[15px]">{label}</span>
+      <span
+        className={`flex-1 text-[15px] text-right text-[#3C3C43] ${
+          mono ? 'font-mono text-[13px]' : ''
+        } ${multiline ? 'text-left whitespace-pre-line' : 'truncate'}`}
+      >
         {value}
       </span>
     </div>

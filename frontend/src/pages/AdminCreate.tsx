@@ -16,9 +16,7 @@ export function AdminCreate() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const onChange =
-    (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-      setForm({ ...form, [k]: e.target.value })
+  const update = (k: keyof typeof form, v: string | number) => setForm({ ...form, [k]: v })
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -46,92 +44,89 @@ export function AdminCreate() {
 
   return (
     <div className="max-w-2xl mx-auto px-8 py-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight">发布新竞拍</h1>
-        <p className="text-sm text-ink-500 mt-1">填写商品信息和竞拍规则</p>
+      <div className="admin-page-header">
+        <div>
+          <h1 className="ios-large-title">发布新竞拍</h1>
+          <p className="text-sm text-[#8E8E93] mt-1">填写商品信息与竞拍规则</p>
+        </div>
       </div>
 
-      <form onSubmit={onSubmit} className="card p-6 space-y-4">
-        <Field label="商品名称" required>
-          <input
-            type="text"
+      <form onSubmit={onSubmit}>
+        {/* 商品信息 */}
+        <div className="ios-section-header" style={{ padding: '0 4px 8px' }}>商品信息</div>
+        <div className="ios-list ios-list-flush">
+          <RowInput
+            label="商品名称"
             value={form.title}
-            onChange={onChange('title')}
+            onChange={(v) => update('title', v)}
             required
-            className="input-default"
+            placeholder="必填"
           />
-        </Field>
-        <Field label="商品描述">
-          <textarea
+          <RowTextarea
+            label="商品描述"
             value={form.description}
-            onChange={onChange('description')}
-            rows={3}
-            className="input-default resize-none"
+            onChange={(v) => update('description', v)}
+            placeholder="选填"
           />
-        </Field>
-        <Field label="图片 URL">
-          <input
-            type="url"
+          <RowInput
+            label="图片 URL"
             value={form.image_url}
-            onChange={onChange('image_url')}
+            onChange={(v) => update('image_url', v)}
             placeholder="https://..."
-            className="input-default"
+            type="url"
           />
-        </Field>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="起拍价 (¥)">
-            <input
-              type="number"
-              value={form.start_price}
-              onChange={onChange('start_price')}
-              min={0}
-              step="0.01"
-              className="input-default"
-            />
-          </Field>
-          <Field label="加价幅度 (¥)" required>
-            <input
-              type="number"
-              value={form.price_step}
-              onChange={onChange('price_step')}
-              min={0.01}
-              step="0.01"
-              required
-              className="input-default"
-            />
-          </Field>
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="封顶价 (¥, 选填)">
-            <input
-              type="number"
-              value={form.ceiling_price}
-              onChange={onChange('ceiling_price')}
-              min={0}
-              step="0.01"
-              placeholder="留空则无封顶"
-              className="input-default"
-            />
-          </Field>
-          <Field label="竞拍时长 (秒)" required>
-            <input
-              type="number"
-              value={form.duration_seconds}
-              onChange={onChange('duration_seconds')}
-              min={1}
-              required
-              className="input-default"
-            />
-          </Field>
+
+        {/* 价格规则 */}
+        <div className="ios-section-header mt-6" style={{ padding: '0 4px 8px' }}>价格规则</div>
+        <div className="ios-list ios-list-flush">
+          <RowInput
+            label="起拍价"
+            value={String(form.start_price)}
+            onChange={(v) => update('start_price', v)}
+            type="number"
+            suffix="¥"
+          />
+          <RowInput
+            label="加价幅度"
+            value={String(form.price_step)}
+            onChange={(v) => update('price_step', v)}
+            type="number"
+            required
+            suffix="¥"
+            placeholder="必填"
+          />
+          <RowInput
+            label="封顶价"
+            value={form.ceiling_price}
+            onChange={(v) => update('ceiling_price', v)}
+            type="number"
+            suffix="¥"
+            placeholder="留空 = 无封顶"
+          />
+        </div>
+
+        {/* 持续时长 */}
+        <div className="ios-section-header mt-6" style={{ padding: '0 4px 8px' }}>持续时间</div>
+        <div className="ios-list ios-list-flush">
+          <RowInput
+            label="竞拍时长"
+            value={String(form.duration_seconds)}
+            onChange={(v) => update('duration_seconds', v)}
+            type="number"
+            required
+            suffix="秒"
+            placeholder="必填"
+          />
         </div>
 
         {error && (
-          <div className="text-rose-600 text-sm bg-rose-50 rounded-xl px-3 py-2 border border-rose-200">
+          <div className="mt-6 rounded-xl px-4 py-3 bg-[#FFE5E5] text-[#FF3B30] text-sm">
             ⚠ {error}
           </div>
         )}
 
-        <div className="flex gap-3 pt-2">
+        <div className="flex gap-3 mt-8">
           <button
             type="button"
             onClick={() => nav('/admin')}
@@ -152,22 +147,66 @@ export function AdminCreate() {
   )
 }
 
-function Field({
+function RowInput({
   label,
+  value,
+  onChange,
+  type = 'text',
   required,
-  children,
+  placeholder,
+  suffix,
 }: {
   label: string
+  value: string
+  onChange: (v: string) => void
+  type?: string
   required?: boolean
-  children: React.ReactNode
+  placeholder?: string
+  suffix?: string
 }) {
   return (
-    <label className="block">
-      <div className="text-sm text-ink-700 mb-1.5 font-medium">
+    <label className="ios-list-item">
+      <span className="text-[#000] w-28 shrink-0 text-[15px]">
         {label}
-        {required && <span className="text-accent-600 ml-1">*</span>}
+        {required && <span className="text-[#FF3B30] ml-1">*</span>}
+      </span>
+      <div className="flex-1 flex items-center justify-end gap-2 min-w-0">
+        <input
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          required={required}
+          placeholder={placeholder}
+          step={type === 'number' ? '0.01' : undefined}
+          className="flex-1 bg-transparent outline-none text-right text-[15px] placeholder:text-[#C7C7CC]"
+        />
+        {suffix && <span className="text-[#8E8E93] text-[13px]">{suffix}</span>}
       </div>
-      {children}
+    </label>
+  )
+}
+
+function RowTextarea({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+}) {
+  return (
+    <label className="ios-list-item items-start" style={{ alignItems: 'flex-start', paddingTop: 14, paddingBottom: 14 }}>
+      <span className="text-[#000] w-28 shrink-0 text-[15px] pt-0.5">{label}</span>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        rows={3}
+        className="flex-1 bg-transparent outline-none text-right text-[15px] placeholder:text-[#C7C7CC] resize-none"
+      />
     </label>
   )
 }

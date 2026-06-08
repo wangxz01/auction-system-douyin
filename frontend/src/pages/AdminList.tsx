@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Auction } from '../lib/types'
 import { StatusBadge } from '../components/StatusBadge'
@@ -49,45 +49,50 @@ export function AdminList() {
 
   return (
     <div className="max-w-5xl mx-auto px-8 py-8">
-      <div className="flex items-center justify-between mb-6">
+      <div className="admin-page-header">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">竞拍管理</h1>
-          <p className="text-sm text-ink-500 mt-1">查看、开始或取消你发布的竞拍</p>
+          <h1 className="ios-large-title">竞拍管理</h1>
+          <p className="text-sm text-[#8E8E93] mt-1">查看、开始或取消你发布的竞拍</p>
         </div>
         <button
           onClick={() => nav('/admin/create')}
-          className="btn-accent px-5 py-2.5 rounded-full text-sm"
+          className="btn-accent px-5 py-2 rounded-full text-sm"
         >
           ＋ 发布新竞拍
         </button>
       </div>
 
+      <div className="ios-section-header" style={{ padding: '0 4px 8px' }}>
+        <span>全部竞拍</span>
+        {!loading && <span className="text-[#8E8E93]">{auctions.length} 件</span>}
+      </div>
+
       {loading && (
-        <div className="card p-12 text-center text-ink-400">加载中...</div>
+        <div className="bg-white rounded-2xl p-12 text-center text-[#8E8E93]">加载中...</div>
       )}
       {error && (
-        <div className="card p-12 text-center text-rose-500">错误: {error}</div>
+        <div className="bg-white rounded-2xl p-12 text-center text-[#FF3B30]">错误: {error}</div>
       )}
       {!loading && !error && (
-        <div className="card overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-white rounded-2xl overflow-hidden">
+          <table className="w-full text-[14px]">
             <thead>
-              <tr className="text-ink-500 bg-app-50">
-                <th className="px-4 py-3 text-left font-medium">ID</th>
-                <th className="px-4 py-3 text-left font-medium">商品</th>
-                <th className="px-4 py-3 text-right font-medium">起拍价</th>
-                <th className="px-4 py-3 text-right font-medium">加价幅度</th>
-                <th className="px-4 py-3 text-right font-medium">当前价</th>
-                <th className="px-4 py-3 text-center font-medium">状态</th>
-                <th className="px-4 py-3 text-right font-medium">操作</th>
+              <tr className="text-[#8E8E93] text-xs uppercase tracking-wide">
+                <th className="px-5 py-3 text-left font-medium">ID</th>
+                <th className="px-5 py-3 text-left font-medium">商品</th>
+                <th className="px-5 py-3 text-right font-medium">起拍价</th>
+                <th className="px-5 py-3 text-right font-medium">加价幅度</th>
+                <th className="px-5 py-3 text-right font-medium">当前价</th>
+                <th className="px-5 py-3 text-center font-medium">状态</th>
+                <th className="px-5 py-3 text-right font-medium">操作</th>
               </tr>
             </thead>
             <tbody>
               {auctions.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-16 text-center text-ink-400">
+                  <td colSpan={7} className="px-5 py-16 text-center text-[#8E8E93]">
                     <div className="text-5xl mb-2">📦</div>
-                    暂无竞拍，点击右上角发布
+                    暂无竞拍
                   </td>
                 </tr>
               )}
@@ -95,27 +100,19 @@ export function AdminList() {
                 <tr
                   key={a.id}
                   onClick={() => nav(`/admin/auctions/${a.id}`)}
-                  className="border-t border-app-100 hover:bg-app-50 transition-colors cursor-pointer"
+                  className="relative hover:bg-[#F8F8F8] active:bg-[#EFEFEF] transition-colors cursor-pointer admin-row"
                 >
-                  <td className="px-4 py-3 text-ink-400">#{a.id}</td>
-                  <td className="px-4 py-3">
-                    <Link
-                      to={`/admin/auctions/${a.id}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="font-medium hover:text-accent-600"
-                    >
-                      {a.title}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-right text-ink-700">¥{a.start_price}</td>
-                  <td className="px-4 py-3 text-right text-ink-700">¥{a.price_step}</td>
-                  <td className="px-4 py-3 text-right text-accent-600 font-semibold">
+                  <td className="px-5 py-3 text-[#8E8E93]">#{a.id}</td>
+                  <td className="px-5 py-3 font-medium">{a.title}</td>
+                  <td className="px-5 py-3 text-right text-[#3C3C43]">¥{a.start_price}</td>
+                  <td className="px-5 py-3 text-right text-[#3C3C43]">¥{a.price_step}</td>
+                  <td className="px-5 py-3 text-right text-[#FF9500] font-semibold">
                     ¥{a.current_price}
                   </td>
-                  <td className="px-4 py-3 text-center">
+                  <td className="px-5 py-3 text-center">
                     <StatusBadge status={a.status} />
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-5 py-3 text-right">
                     {a.status === 'pending' && (
                       <div className="flex justify-end gap-2">
                         <button
@@ -141,7 +138,7 @@ export function AdminList() {
                       </button>
                     )}
                     {(a.status === 'finished' || a.status === 'cancelled') && (
-                      <span className="text-ink-400">—</span>
+                      <span className="text-[#C7C7CC]">—</span>
                     )}
                   </td>
                 </tr>

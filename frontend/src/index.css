@@ -231,6 +231,9 @@ body {
   margin: 0 16px;
   overflow: hidden;
 }
+.ios-list-flush {
+  margin: 0;
+}
 
 .ios-list-item {
   display: flex;
@@ -320,54 +323,84 @@ body {
 .bottom-nav-item.is-active { color: #FF9500; }
 
 /* ============================================================
-   🖥️ AdminSidebar（商家左侧导航，2.jpg 风格）
+   🖥️ AdminSidebar（商家左侧导航 — iOS 灰白克制风）
    ============================================================ */
 .admin-sidebar {
-  width: 96px;
+  width: 88px;
   flex-shrink: 0;
   background: #ffffff;
-  border-right: 1px solid rgba(0, 0, 0, 0.05);
+  border-right: 1px solid rgba(60, 60, 67, 0.18);
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 24px 0;
-  gap: 4px;
+  padding: 20px 8px;
+  gap: 2px;
+  position: relative;
+}
+.admin-sidebar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(60, 60, 67, 0.12);
+  transform: scaleX(0.5);
+  transform-origin: right;
 }
 .admin-sidebar-brand {
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
   background: linear-gradient(135deg, #FFD451, #FF9500);
   color: #3a2a00;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 700;
-  margin-bottom: 16px;
-  box-shadow: 0 4px 12px rgba(255, 149, 0, 0.3);
+  margin-bottom: 18px;
 }
 .admin-sidebar-item {
   width: 72px;
   padding: 10px 0;
-  border-radius: 12px;
+  border-radius: 10px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  color: #86868b;
+  gap: 3px;
+  color: #8E8E93;
   font-size: 11px;
   font-weight: 500;
-  transition: all 0.15s ease;
+  transition: background-color 0.12s ease, color 0.12s ease;
 }
-.admin-sidebar-item:hover { background: #F5F5F7; }
+.admin-sidebar-item:hover { background: #F2F2F7; }
 .admin-sidebar-item.is-active {
   color: #FF9500;
-  background: #FFF8E5;
+  background: #F2F2F7;
   font-weight: 600;
 }
 .admin-sidebar-item .icon { font-size: 22px; line-height: 1; }
 .admin-sidebar-spacer { flex: 1; }
+
+/* 商家页面统一头部（大标题 + 副标） */
+.admin-page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 0 0 12px 0;
+  margin-bottom: 16px;
+  position: relative;
+}
+.admin-page-header::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 1px;
+  background: rgba(60, 60, 67, 0.12);
+  transform: scaleY(0.5);
+  transform-origin: bottom;
+}
 
 /* ============================================================
    📱 PhoneFrame：仅 md+ 显示 iPhone 边框
