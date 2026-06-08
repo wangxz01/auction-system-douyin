@@ -29,6 +29,11 @@ func GetComments(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "id 不合法"})
 		return
 	}
+	var auction models.Auction
+	if err := config.DB.First(&auction, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "竞拍不存在"})
+		return
+	}
 
 	limit := parseCommentLimit(c.Query("limit"))
 

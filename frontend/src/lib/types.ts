@@ -2,14 +2,19 @@ export type AuctionStatus = 'pending' | 'active' | 'finished' | 'cancelled'
 
 export interface Auction {
   id: number
+  seller_user_id: number
   title: string
   description: string
   image_url: string
   stream_url: string
   start_price: number
+  start_price_cents: number
   price_step: number
+  price_step_cents: number
   ceiling_price: number | null
+  ceiling_price_cents: number | null
   current_price: number
+  current_price_cents: number
   duration_seconds: number
   status: AuctionStatus
   winner_id: number | null
@@ -24,6 +29,7 @@ export interface Bid {
   auction_id: number
   user_id: number
   amount: number
+  amount_cents: number
   created_at: string
 }
 
@@ -32,6 +38,7 @@ export interface Order {
   auction_id: number
   user_id: number
   final_price: number
+  final_price_cents: number
   status: string
   created_at: string
   updated_at: string
@@ -49,6 +56,7 @@ export interface AuctionComment {
 export interface TopBid {
   user_id: number
   amount: number
+  amount_cents: number
 }
 
 export interface MyBidEntry {
@@ -69,6 +77,7 @@ export type WSMessage =
       type: 'new_bid'
       auction_id: number
       current_price: number
+      current_price_cents: number
       winner_id: number
       ends_at: string
       top_bids: TopBid[]
@@ -77,6 +86,7 @@ export type WSMessage =
       type: 'auction_finished'
       auction_id: number
       final_price: number
+      final_price_cents: number
       winner_id: number | null
     }
   | {

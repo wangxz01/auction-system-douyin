@@ -12,6 +12,10 @@ import (
 
 func main() {
 	cfg := config.Load()
+	if err := config.ValidateSecurity(cfg); err != nil {
+		log.Fatalf("配置校验失败: %v", err)
+	}
+	config.SetActive(cfg)
 
 	config.InitDB(cfg)
 	ws.InitHub()

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"auction-system/backend/config"
 	"auction-system/backend/ws"
 
 	"github.com/gin-gonic/gin"
@@ -21,8 +22,18 @@ const (
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	// 开发阶段允许任意来源；生产应校验 Origin。
-	CheckOrigin: func(r *http.Request) bool { return true },
+	CheckOrigin: func(r *http.Request) bool {
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true
+		}
+		for _, allowed := range config.Get().AllowedOrigins {
+			if allowed == "*" || allowed == origin {
+				return true
+			}
+		}
+		return false
+	},
 }
 
 func HandleWS(c *gin.Context) {

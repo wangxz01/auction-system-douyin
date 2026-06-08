@@ -79,8 +79,17 @@ func UserIDFrom(c *gin.Context) (uint, bool) {
 	return id, ok
 }
 
+func UsernameFrom(c *gin.Context) (string, bool) {
+	v, ok := c.Get(CtxUsernameKey)
+	if !ok {
+		return "", false
+	}
+	username, ok := v.(string)
+	return username, ok
+}
+
 // getCfg 每次重新加载一份 config，避免循环依赖（不缓存）。
 // 实际使用时性能可忽略；如果在意可以改成包级 var + Init 注入。
 func getCfg() *config.Config {
-	return config.Load()
+	return config.Get()
 }

@@ -31,10 +31,34 @@ func InitDB(cfg *Config) {
 		&models.Bid{},
 		&models.Order{},
 		&models.Comment{},
+		&models.Merchant{},
 	); err != nil {
 		log.Fatalf("❌ AutoMigrate 失败: %v", err)
 	}
 
+	backfillMoneyColumns(db)
+
 	DB = db
 	log.Println("✅ MySQL 连接成功 + 表结构已同步")
+}
+
+func backfillMoneyColumns(db *gorm.DB) {
+	db.Model(&models.Auction{}).
+		Where("start_price_cents = 0 AND start_price > 0").
+		Update("start_price_cents", gorm.Expr("ROUND(start_price * 100)"))
+	db.Model(&models.Auction{}).
+		Where("price_step_cents = 0 AND price_step > 0").
+		Update("price_step_cents", gorm.Expr("ROUND(price_step * 100)"))
+	db.Model(&models.Auction{}).
+		Where("current_price_cents = 0 AND current_price > 0").
+		Update("current_price_cents", gorm.Expr("ROUND(current_price * 100)"))
+	db.Model(&models.Auction{}).
+		Where("ceiling_price_cents IS NULL AND ceiling_price IS NOT NULL").
+		Update("ceiling_price_cents", gorm.Expr("ROUND(ceiling_price * 100)"))
+	db.Model(&models.Bid{}).
+		Where("amount_cents = 0 AND amount > 0").
+		Update("amount_cents", gorm.Expr("ROUND(amount * 100)"))
+	db.Model(&models.Order{}).
+		Where("final_price_cents = 0 AND final_price > 0").
+		Update("final_price_cents", gorm.Expr("ROUND(final_price * 100)"))
 }

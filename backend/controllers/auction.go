@@ -3,6 +3,7 @@ package controllers
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"auction-system/backend/config"
@@ -13,27 +14,64 @@ import (
 )
 
 type createAuctionReq struct {
-	Title           string   `json:"title"`
-	Description     string   `json:"description"`
-	ImageURL        string   `json:"image_url"`
-	StreamURL       string   `json:"stream_url"`
-	StartPrice      float64  `json:"start_price"`
-	PriceStep       float64  `json:"price_step"`
-	CeilingPrice    *float64 `json:"ceiling_price"`
-	DurationSeconds int      `json:"duration_seconds"`
+	Title             string   `json:"title"`
+	Description       string   `json:"description"`
+	ImageURL          string   `json:"image_url"`
+	StreamURL         string   `json:"stream_url"`
+	StartPrice        float64  `json:"start_price"`
+	StartPriceCents   *int64   `json:"start_price_cents"`
+	PriceStep         float64  `json:"price_step"`
+	PriceStepCents    *int64   `json:"price_step_cents"`
+	CeilingPrice      *float64 `json:"ceiling_price"`
+	CeilingPriceCents *int64   `json:"ceiling_price_cents"`
+	DurationSeconds   int      `json:"duration_seconds"`
 }
 
 func CreateAuction(c *gin.Context) {
+	sellerID, ok := canCreateAuction(c)
+	if !ok {
+		return
+	}
 	var req createAuctionReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误: " + err.Error()})
 		return
 	}
+	req.Title = strings.TrimSpace(req.Title)
+	req.ImageURL = strings.TrimSpace(req.ImageURL)
+	req.StreamURL = strings.TrimSpace(req.StreamURL)
 	if req.Title == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "title 必填"})
 		return
 	}
-	if req.PriceStep <= 0 {
+	if len([]rune(req.Title)) > 80 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "title 不能超过 80 个字符"})
+		return
+	}
+	if len(req.ImageURL) > 512 || len(req.StreamURL) > 500 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "图片或直播 URL 过长"})
+		return
+	}
+
+	startPriceCents := int64(0)
+	if req.StartPriceCents != nil {
+		startPriceCents = *req.StartPriceCents
+	} else {
+		startPriceCents = floatToCents(req.StartPrice)
+	}
+	priceStepCents := int64(0)
+	if req.PriceStepCents != nil {
+		priceStepCents = *req.PriceStepCents
+	} else {
+		priceStepCents = floatToCents(req.PriceStep)
+	}
+	ceilingPriceCents := optionalCentsOrLegacy(req.CeilingPriceCents, req.CeilingPrice)
+
+	if startPriceCents <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "start_price 必须大于 0"})
+		return
+	}
+	if priceStepCents <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "price_step 必须大于 0"})
 		return
 	}
@@ -41,22 +79,27 @@ func CreateAuction(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "duration_seconds 必须大于 0"})
 		return
 	}
-	if req.CeilingPrice != nil && *req.CeilingPrice <= req.StartPrice {
+	if ceilingPriceCents != nil && *ceilingPriceCents <= startPriceCents {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ceiling_price 必须大于 start_price"})
 		return
 	}
 
 	a := models.Auction{
-		Title:           req.Title,
-		Description:     req.Description,
-		ImageURL:        req.ImageURL,
-		StreamURL:       req.StreamURL,
-		StartPrice:      req.StartPrice,
-		PriceStep:       req.PriceStep,
-		CeilingPrice:    req.CeilingPrice,
-		CurrentPrice:    req.StartPrice,
-		DurationSeconds: req.DurationSeconds,
-		Status:          "pending",
+		SellerUserID:      sellerID,
+		Title:             req.Title,
+		Description:       req.Description,
+		ImageURL:          req.ImageURL,
+		StreamURL:         req.StreamURL,
+		StartPrice:        centsToFloat(startPriceCents),
+		StartPriceCents:   startPriceCents,
+		PriceStep:         centsToFloat(priceStepCents),
+		PriceStepCents:    priceStepCents,
+		CeilingPrice:      legacyFloatPointer(ceilingPriceCents),
+		CeilingPriceCents: ceilingPriceCents,
+		CurrentPrice:      centsToFloat(startPriceCents),
+		CurrentPriceCents: startPriceCents,
+		DurationSeconds:   req.DurationSeconds,
+		Status:            "pending",
 	}
 	if err := config.DB.Create(&a).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -103,6 +146,9 @@ func StartAuction(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "当前状态不能开始: " + a.Status})
 		return
 	}
+	if !canManageAuction(c, a) {
+		return
+	}
 	now := time.Now()
 	ends := now.Add(time.Duration(a.DurationSeconds) * time.Second)
 	a.Status = "active"
@@ -135,6 +181,9 @@ func CancelAuction(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "当前状态不能取消: " + a.Status})
 		return
 	}
+	if !canManageAuction(c, a) {
+		return
+	}
 	a.Status = "cancelled"
 	if err := config.DB.Save(&a).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -145,6 +194,14 @@ func CancelAuction(c *gin.Context) {
 		"auction_id": a.ID,
 	})
 	c.JSON(http.StatusOK, gin.H{"data": a})
+}
+
+func legacyFloatPointer(cents *int64) *float64 {
+	if cents == nil {
+		return nil
+	}
+	v := centsToFloat(*cents)
+	return &v
 }
 
 func parseID(s string) (uint, error) {

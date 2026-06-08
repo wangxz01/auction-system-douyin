@@ -1,8 +1,10 @@
 package config
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -24,28 +26,72 @@ type Config struct {
 
 	JWTSecret      string
 	JWTExpireHours string
+
+	AllowedOrigins []string
+	AdminUsernames []string
 }
+
+var active *Config
 
 func Load() *Config {
 	if err := godotenv.Load(); err != nil {
 		log.Println("no .env file found, falling back to process env")
 	}
 
-	return &Config{
-		ServerPort:    getEnv("SERVER_PORT", "8080"),
-		ServerMode:    getEnv("SERVER_MODE", "debug"),
-		DBHost:        getEnv("DB_HOST", "127.0.0.1"),
-		DBPort:        getEnv("DB_PORT", "3306"),
-		DBUser:        getEnv("DB_USER", "auction"),
-		DBPassword:    getEnv("DB_PASSWORD", "auctionpass"),
-		DBName:        getEnv("DB_NAME", "auction"),
-		RedisHost:     getEnv("REDIS_HOST", "127.0.0.1"),
-		RedisPort:     getEnv("REDIS_PORT", "6379"),
+	cfg := &Config{
+		ServerPort:     getEnv("SERVER_PORT", "8080"),
+		ServerMode:     getEnv("SERVER_MODE", "debug"),
+		DBHost:         getEnv("DB_HOST", "127.0.0.1"),
+		DBPort:         getEnv("DB_PORT", "3306"),
+		DBUser:         getEnv("DB_USER", "auction"),
+		DBPassword:     getEnv("DB_PASSWORD", "auctionpass"),
+		DBName:         getEnv("DB_NAME", "auction"),
+		RedisHost:      getEnv("REDIS_HOST", "127.0.0.1"),
+		RedisPort:      getEnv("REDIS_PORT", "6379"),
 		RedisPassword:  getEnv("REDIS_PASSWORD", ""),
 		RedisDB:        getEnv("REDIS_DB", "0"),
-		JWTSecret:      getEnv("JWT_SECRET", "dev-only-do-not-use-in-prod"),
+		JWTSecret:      getEnv("JWT_SECRET", ""),
 		JWTExpireHours: getEnv("JWT_EXPIRE_HOURS", "72"),
+		AllowedOrigins: splitCSV(getEnv("ALLOWED_ORIGINS", "")),
+		AdminUsernames: splitCSV(getEnv("ADMIN_USERNAMES", "")),
 	}
+	if cfg.ServerMode != "release" && cfg.JWTSecret == "" {
+		cfg.JWTSecret = "dev-only-do-not-use-in-prod"
+	}
+	if cfg.ServerMode != "release" && len(cfg.AllowedOrigins) == 0 {
+		cfg.AllowedOrigins = []string{"http://localhost:5173", "http://127.0.0.1:5173"}
+	}
+	return cfg
+}
+
+func SetActive(cfg *Config) {
+	active = cfg
+}
+
+func Get() *Config {
+	if active != nil {
+		return active
+	}
+	active = Load()
+	return active
+}
+
+func ValidateSecurity(cfg *Config) error {
+	if cfg.ServerMode != "release" {
+		return nil
+	}
+	if strings.TrimSpace(cfg.JWTSecret) == "" || cfg.JWTSecret == "dev-only-do-not-use-in-prod" {
+		return fmt.Errorf("release 模式必须显式配置 JWT_SECRET")
+	}
+	if len(cfg.AllowedOrigins) == 0 {
+		return fmt.Errorf("release 模式必须显式配置 ALLOWED_ORIGINS")
+	}
+	for _, origin := range cfg.AllowedOrigins {
+		if origin == "*" {
+			return fmt.Errorf("release 模式不允许 ALLOWED_ORIGINS 包含 *")
+		}
+	}
+	return nil
 }
 
 func getEnv(key, fallback string) string {
@@ -53,6 +99,21 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func splitCSV(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 /*
@@ -82,4 +143,3 @@ godotenv.Load() 的工作原理：
       3. 在 .env 和 .env.example 里加这个变量
 ================================================================================
 */
-

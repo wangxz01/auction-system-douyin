@@ -72,6 +72,21 @@
 | 6 个页面全部重做 | ✅ | UserHall / AuctionDetail / OrderPage / AdminList / AdminCreate / Login |
 | 生产构建 | ✅ | 302 KB JS / 30 KB CSS |
 
+### ✅ 第七阶段：后端核心加固（已完成）
+
+目标：补齐拍卖核心正确性、权限边界和生产安全配置。
+
+| 模块 | 状态 | 说明 |
+|---|---|---|
+| 出价事务 | ✅ | `PlaceBid` 使用事务 + `SELECT ... FOR UPDATE`，避免并发低价覆盖高价 |
+| 金额整数化 | ✅ | 新增 `*_cents` 字段，核心校验按“分”计算，旧元字段保留兼容 |
+| 商家权限 | ✅ | 新增 `merchants` 表，创建/开始/取消竞拍要求商家或管理员 |
+| 商家管理 | ✅ | `ADMIN_USERNAMES` 指定管理员，可创建/禁用商家 |
+| 订单保护 | ✅ | 订单查询需登录，仅中标用户、竞拍商家或管理员可看 |
+| 生产安全配置 | ✅ | release 模式必须显式配置 `JWT_SECRET` 和 `ALLOWED_ORIGINS` |
+| 评论历史一致性 | ✅ | 不存在的竞拍评论历史返回 404 |
+| 后端测试 | ✅ | 覆盖评论、权限、金额分字段、订单保护、并发出价和安全配置 |
+
 ### ✅ 第五阶段：用户系统（已完成）
 
 目标：真实注册/登录、JWT 鉴权、敏感接口保护、前端身份持久化。
@@ -190,33 +205,46 @@ ws.onmessage = (e) => {
 | 模块 | 状态 | 说明 |
 |---|---|---|
 | 数据库连接 | ✅ | `config/db.go` 用 GORM 连 MySQL，启动时 AutoMigrate 建表 |
-| 数据模型 | ✅ | `models/` 下 User / Auction / Bid / Order 四个结构体 |
+| 数据模型 | ✅ | User / Merchant / Auction / Bid / Order / Comment |
 | 竞拍接口 | ✅ | 创建 / 列表 / 详情 / 开始 / 取消，5 个接口 |
 | 出价接口 | ✅ | 出价（含加价/封顶/自动延时校验）+ Top10 排行榜 |
-| 订单接口 | ✅ | 按 auction_id 查订单 + 内部 createOrder 封装 |
+| 订单接口 | ✅ | 按 auction_id 查订单；需登录且校验可见权限 |
 | 定时任务 | ✅ | `config/scheduler.go` 每 5s 扫描过期 active 竞拍，自动 finished 并生成订单 |
-| CORS | ✅ | 已放开为允许所有来源 |
+| CORS | ✅ | 由 `ALLOWED_ORIGINS` 配置，release 模式必须显式设置 |
 | E2E 测试 | ✅ | curl 全流程跑通：创建→开始→出价→封顶/超时→查订单 |
 
 **已注册路由清单**
 
 ```
 GET    /health
-POST   /api/auctions
+POST   /api/auth/register
+POST   /api/auth/login
 GET    /api/auctions
 GET    /api/auctions/:id
+GET    /api/auctions/:id/bids
+GET    /api/auctions/:id/comments
+GET    /ws/auctions/:id
+
+# 以下接口需要 Authorization: Bearer <token>
+GET    /api/auth/me
+POST   /api/auctions
 POST   /api/auctions/:id/start
 POST   /api/auctions/:id/cancel
 POST   /api/auctions/:id/bids
-GET    /api/auctions/:id/bids
+POST   /api/auctions/:id/comments
 GET    /api/auctions/:id/order
+GET    /api/me/bids
+GET    /api/me/orders
+GET    /api/admin/merchants
+POST   /api/admin/merchants
+DELETE /api/admin/merchants/:user_id
 ```
 
 **业务规则要点**
 
 - 所有成功响应 `{"data": ...}`，失败响应 `{"error": "原因"}`
 - 出价校验顺序：状态 → 是否过期 → 加价幅度 → 封顶价
-- 加价规则：`amount = current_price + n × price_step` (n ≥ 1)
+- 加价规则：`amount_cents = current_price_cents + n × price_step_cents` (n ≥ 1)
 - 自动延时：距 `ends_at` 不足 30s 出价 → ends_at 延后到 30s
 - 封顶价命中：立即 finished + 生成订单
 - 定时器幂等：用条件更新避免与封顶价路径重复生成订单
@@ -299,7 +327,7 @@ auction-system/
 
 ## 🗂️ 数据模型
 
-数据库 `auction` 共 4 张表，GORM 启动时 AutoMigrate 自动建好。所有主键 `bigint unsigned`，价格 `decimal(12,2)`（精确到分），时间 `datetime(3)`（毫秒精度）。
+数据库 `auction` 共 6 张表，GORM 启动时 AutoMigrate 自动建好。所有主键 `bigint unsigned`，金额核心字段使用整数分（`*_cents`），旧的元字段保留用于前端兼容，时间 `datetime(3)`（毫秒精度）。
 
 ### `auctions`（竞拍主表）
 
@@ -308,13 +336,15 @@ auction-system/
 | 字段 | 类型 | 索引 | 说明 |
 |---|---|---|---|
 | `id` | bigint unsigned | PK | 主键 |
+| `seller_user_id` | bigint unsigned | IDX | 创建该竞拍的商家用户 |
 | `title` | varchar(255) | — | 商品标题 |
 | `description` | text | — | 商品描述 |
 | `image_url` | varchar(512) | — | 主图 URL |
-| `start_price` | decimal(12,2) | — | 起拍价 |
-| `price_step` | decimal(12,2) | — | 加价幅度 |
-| `ceiling_price` | decimal(12,2) | — | 封顶价（可空） |
-| `current_price` | decimal(12,2) | — | 当前价 |
+| `start_price_cents` | bigint | — | 起拍价（分） |
+| `price_step_cents` | bigint | — | 加价幅度（分） |
+| `ceiling_price_cents` | bigint | — | 封顶价（分，可空） |
+| `current_price_cents` | bigint | — | 当前价（分） |
+| `start_price`/`price_step`/`ceiling_price`/`current_price` | decimal(12,2) | — | 兼容旧前端的元字段 |
 | `duration_seconds` | bigint | — | 持续秒数 |
 | `status` | varchar(16) | IDX | pending / active / finished / cancelled |
 | `winner_id` | bigint unsigned | — | 中标用户（可空） |
@@ -329,7 +359,8 @@ auction-system/
 | `id` | bigint unsigned | PK | |
 | `auction_id` | bigint unsigned | IDX | 哪场竞拍 |
 | `user_id` | bigint unsigned | IDX | 出价人 |
-| `amount` | decimal(12,2) | — | 出价金额 |
+| `amount_cents` | bigint | — | 出价金额（分） |
+| `amount` | decimal(12,2) | — | 兼容旧前端的元字段 |
 | `created_at` | datetime(3) | — | 出价时间 |
 
 ### `orders`（订单表）
@@ -339,8 +370,30 @@ auction-system/
 | `id` | bigint unsigned | PK | |
 | `auction_id` | bigint unsigned | **UNIQUE** | 一场拍卖最多一个订单 |
 | `user_id` | bigint unsigned | IDX | 中标用户 |
-| `final_price` | decimal(12,2) | — | 成交价 |
+| `final_price_cents` | bigint | — | 成交价（分） |
+| `final_price` | decimal(12,2) | — | 兼容旧前端的元字段 |
 | `status` | varchar(16) | — | 默认 pending（后续可扩 paid/shipped） |
+| `created_at`/`updated_at` | datetime(3) | — | 时间戳 |
+
+### `comments`（直播评论表）
+
+| 字段 | 类型 | 索引 | 说明 |
+|---|---|---|---|
+| `id` | bigint unsigned | PK | |
+| `auction_id` | bigint unsigned | IDX | 哪场竞拍 |
+| `user_id` | bigint unsigned | IDX | 评论用户 |
+| `username` | varchar(64) | — | 评论时用户名快照 |
+| `content` | varchar(300) | — | 评论内容 |
+| `created_at` | datetime(3) | IDX | 评论时间 |
+
+### `merchants`（商家表）
+
+| 字段 | 类型 | 索引 | 说明 |
+|---|---|---|---|
+| `id` | bigint unsigned | PK | |
+| `user_id` | bigint unsigned | UNIQUE | 对应用户 |
+| `display_name` | varchar(64) | — | 商家展示名 |
+| `status` | varchar(16) | IDX | active / disabled |
 | `created_at`/`updated_at` | datetime(3) | — | 时间戳 |
 
 ### `users`（用户表）
@@ -365,6 +418,8 @@ pending(未开始) ──/start──→ active(进行中) ──自然到期/�
 - pending：只能 start 或 cancel
 - active：可出价、可 cancel；定时器扫描 `ends_at`；触达 `ceiling_price` 立即结束
 - finished / cancelled：只读，不可逆
+- 创建 / 开始 / 取消竞拍：需要商家或管理员权限
+- 查询订单：需要登录，且只能由中标用户、竞拍商家或管理员查看
 
 ---
 
@@ -439,7 +494,14 @@ REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
 REDIS_PASSWORD=
 REDIS_DB=0
+
+JWT_SECRET=replace-with-a-long-random-string
+JWT_EXPIRE_HOURS=72
+ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+ADMIN_USERNAMES=admin
 ```
+
+> `SERVER_MODE=release` 时必须显式配置 `JWT_SECRET` 和 `ALLOWED_ORIGINS`，且 `ALLOWED_ORIGINS` 不能为 `*`。
 
 ### 前端 `frontend/.env`
 
@@ -469,7 +531,6 @@ VITE_API_BASE=http://localhost:8080
 | `github.com/gin-gonic/gin` | HTTP 框架（类似 Express） |
 | `github.com/gin-contrib/cors` | 跨域中间件 |
 | `gorm.io/gorm` + `gorm.io/driver/mysql` | ORM，把 Go 结构体映射成数据表 |
-| `github.com/redis/go-redis/v9` | Redis 客户端 |
 | `github.com/gorilla/websocket` | WebSocket（实时出价用） |
 | `github.com/joho/godotenv` | 读取 `.env` 文件 |
 
@@ -497,6 +558,8 @@ A: 后端 `.env` 改完要重启 `go run`；前端 `.env` 改完要重启 `npm r
 
 ## 📅 更新记录
 
+- **2026-06-08** — 完成第七阶段：后端核心加固，出价事务锁、商家权限、订单保护、金额分字段、生产安全配置和测试覆盖
+- **2026-06-08** — 完成直播评论持久化：comments 表、历史评论接口、POST 评论接口、WebSocket `new_comment`
 - **2026-06-07** — 完成第六阶段：UI 全面升级，液态玻璃 + 暖色 mesh 背景 + 黄橙 accent 配色
 - **2026-06-07** — 完成第五阶段：用户系统（JWT + bcrypt），敏感接口加鉴权，前端 /login 页 + 路由守卫
 - **2026-06-07** — 完成第四阶段：前端 5 个页面（商家 2 + 用户 3），Tailwind + react-router-dom + 实时 WebSocket 集成
@@ -534,4 +597,3 @@ A: 后端 `.env` 改完要重启 `go run`；前端 `.env` 改完要重启 `npm r
   - 遇到新坑时，补充到"常见问题"
 ================================================================================
 -->
-

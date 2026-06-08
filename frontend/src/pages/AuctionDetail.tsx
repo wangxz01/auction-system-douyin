@@ -123,7 +123,13 @@ export function AuctionDetail() {
     api.get<{ data: Bid[] }>(`/auctions/${auctionId}/bids`).then((r) => {
       const arr = r.data.data
       setBidCount(arr.length)
-      setTopBids(arr.slice(0, 5).map((b) => ({ user_id: b.user_id, amount: b.amount })))
+      setTopBids(
+        arr.slice(0, 5).map((b) => ({
+          user_id: b.user_id,
+          amount: b.amount,
+          amount_cents: b.amount_cents ?? Math.round(b.amount * 100),
+        })),
+      )
       if (arr.some((b) => b.user_id === uid)) hasBidRef.current = true
     })
     api.get<{ data: AuctionComment[] }>(`/auctions/${auctionId}/comments`).then((r) => {

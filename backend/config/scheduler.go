@@ -50,7 +50,11 @@ func sweepExpired() {
 		}
 
 		if fresh.WinnerID != nil {
-			if err := models.CreateOrderForAuction(DB, fresh.ID, *fresh.WinnerID, fresh.CurrentPrice); err != nil {
+			finalPriceCents := fresh.CurrentPriceCents
+			if finalPriceCents == 0 && fresh.CurrentPrice > 0 {
+				finalPriceCents = int64(fresh.CurrentPrice*100 + 0.5)
+			}
+			if err := models.CreateOrderForAuctionCents(DB, fresh.ID, *fresh.WinnerID, finalPriceCents); err != nil {
 				log.Printf("scheduler 生成订单失败 auction=%d: %v", fresh.ID, err)
 			} else {
 				log.Printf("⏰ 竞拍 %d 到期结束，生成订单成功", fresh.ID)
@@ -60,10 +64,11 @@ func sweepExpired() {
 		}
 
 		ws.H.Broadcast(fresh.ID, map[string]any{
-			"type":        "auction_finished",
-			"auction_id":  fresh.ID,
-			"final_price": fresh.CurrentPrice,
-			"winner_id":   fresh.WinnerID,
+			"type":              "auction_finished",
+			"auction_id":        fresh.ID,
+			"final_price":       fresh.CurrentPrice,
+			"final_price_cents": fresh.CurrentPriceCents,
+			"winner_id":         fresh.WinnerID,
 		})
 	}
 }

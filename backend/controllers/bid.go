@@ -1,7 +1,7 @@
 package controllers
 
 import (
-	"math"
+	"errors"
 	"net/http"
 	"time"
 
@@ -11,20 +11,23 @@ import (
 	"auction-system/backend/ws"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type topBidView struct {
-	UserID uint    `json:"user_id"`
-	Amount float64 `json:"amount"`
+	UserID      uint    `json:"user_id"`
+	Amount      float64 `json:"amount"`
+	AmountCents int64   `json:"amount_cents"`
 }
 
 type placeBidReq struct {
-	Amount float64 `json:"amount"`
+	Amount      *float64 `json:"amount"`
+	AmountCents *int64   `json:"amount_cents"`
 }
 
 const (
 	autoExtendThreshold = 30 * time.Second
-	floatEpsilon        = 0.001
 )
 
 func PlaceBid(c *gin.Context) {
@@ -45,104 +48,138 @@ func PlaceBid(c *gin.Context) {
 	}
 
 	var a models.Auction
-	if err := config.DB.First(&a, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "竞拍不存在"})
+	var hitCeiling bool
+	var response gin.H
+	var status = http.StatusOK
+	handled := errors.New("handled")
+
+	txErr := config.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&a, id).Error; err != nil {
+			status = http.StatusNotFound
+			response = gin.H{"error": "竞拍不存在"}
+			return handled
+		}
+
+		if a.Status != "active" {
+			status = http.StatusBadRequest
+			response = gin.H{"error": "竞拍当前不可出价: " + a.Status}
+			return handled
+		}
+		now := time.Now()
+		if a.EndsAt == nil || !now.Before(*a.EndsAt) {
+			status = http.StatusBadRequest
+			response = gin.H{"error": "竞拍已结束"}
+			return handled
+		}
+
+		amountCents := int64(0)
+		if req.AmountCents != nil {
+			amountCents = *req.AmountCents
+		} else if req.Amount != nil {
+			amountCents = floatToCents(*req.Amount)
+		}
+		currentCents := centsOrLegacy(a.CurrentPriceCents, a.CurrentPrice)
+		stepCents := centsOrLegacy(a.PriceStepCents, a.PriceStep)
+		ceilingCents := optionalCentsOrLegacy(a.CeilingPriceCents, a.CeilingPrice)
+
+		if amountCents <= 0 {
+			status = http.StatusBadRequest
+			response = gin.H{"error": "出价金额必须大于 0"}
+			return handled
+		}
+		delta := amountCents - currentCents
+		if delta <= 0 {
+			status = http.StatusBadRequest
+			response = gin.H{"error": "出价必须高于当前价"}
+			return handled
+		}
+		if stepCents <= 0 || delta%stepCents != 0 {
+			status = http.StatusBadRequest
+			response = gin.H{"error": "出价必须为当前价加 price_step 的整数倍"}
+			return handled
+		}
+		if ceilingCents != nil && amountCents > *ceilingCents {
+			status = http.StatusBadRequest
+			response = gin.H{"error": "出价不能超过封顶价"}
+			return handled
+		}
+
+		bid := models.Bid{
+			AuctionID:   a.ID,
+			UserID:      uid,
+			Amount:      centsToFloat(amountCents),
+			AmountCents: amountCents,
+		}
+		if err := tx.Create(&bid).Error; err != nil {
+			return err
+		}
+
+		a.CurrentPrice = centsToFloat(amountCents)
+		a.CurrentPriceCents = amountCents
+		a.StartPriceCents = centsOrLegacy(a.StartPriceCents, a.StartPrice)
+		a.PriceStepCents = stepCents
+		a.CeilingPriceCents = ceilingCents
+		winnerID := uid
+		a.WinnerID = &winnerID
+
+		if a.EndsAt != nil && a.EndsAt.Sub(now) < autoExtendThreshold {
+			newEnds := now.Add(autoExtendThreshold)
+			a.EndsAt = &newEnds
+		}
+
+		hitCeiling = ceilingCents != nil && amountCents == *ceilingCents
+		if hitCeiling {
+			a.Status = "finished"
+		}
+
+		if err := tx.Save(&a).Error; err != nil {
+			return err
+		}
+		if hitCeiling {
+			if err := models.CreateOrderForAuctionCents(tx, a.ID, uid, amountCents); err != nil {
+				return err
+			}
+		}
+
+		response = gin.H{"data": gin.H{
+			"message":             "出价成功",
+			"current_price":       a.CurrentPrice,
+			"current_price_cents": a.CurrentPriceCents,
+			"ends_at":             a.EndsAt,
+			"finished":            hitCeiling,
+		}}
+		return nil
+	})
+	if txErr != nil {
+		if errors.Is(txErr, handled) {
+			c.JSON(status, response)
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": txErr.Error()})
 		return
 	}
 
-	if a.Status != "active" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "竞拍当前不可出价: " + a.Status})
-		return
-	}
-	now := time.Now()
-	if a.EndsAt == nil || !now.Before(*a.EndsAt) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "竞拍已结束"})
-		return
-	}
-
-	// 加价幅度校验：amount = current_price + n * price_step (n >= 1)
-	delta := req.Amount - a.CurrentPrice
-	if delta <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "出价必须高于当前价"})
-		return
-	}
-	steps := delta / a.PriceStep
-	if math.Abs(steps-math.Round(steps)) > floatEpsilon || int(math.Round(steps)) < 1 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "出价必须为当前价加 price_step 的整数倍"})
-		return
-	}
-
-	if a.CeilingPrice != nil && req.Amount > *a.CeilingPrice+floatEpsilon {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "出价不能超过封顶价"})
-		return
-	}
-
-	// 写入 bids
-	bid := models.Bid{AuctionID: a.ID, UserID: uid, Amount: req.Amount}
-	if err := config.DB.Create(&bid).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	// 更新 auction
-	a.CurrentPrice = req.Amount
-	winnerID := uid
-	a.WinnerID = &winnerID
-
-	// 自动延时：距结束不足 30s 则延长 30s
-	if a.EndsAt != nil && a.EndsAt.Sub(now) < autoExtendThreshold {
-		newEnds := now.Add(autoExtendThreshold)
-		a.EndsAt = &newEnds
-	}
-
-	// 封顶价命中：结束并生成订单
-	hitCeiling := a.CeilingPrice != nil && math.Abs(req.Amount-*a.CeilingPrice) < floatEpsilon
-	if hitCeiling {
-		a.Status = "finished"
-	}
-
-	if err := config.DB.Save(&a).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	// 广播 new_bid：包含最新 top5 排行
 	ws.H.Broadcast(a.ID, gin.H{
-		"type":          "new_bid",
-		"auction_id":    a.ID,
-		"current_price": a.CurrentPrice,
-		"winner_id":     a.WinnerID,
-		"ends_at":       a.EndsAt,
-		"top_bids":      fetchTopBids(a.ID, 5),
+		"type":                "new_bid",
+		"auction_id":          a.ID,
+		"current_price":       a.CurrentPrice,
+		"current_price_cents": a.CurrentPriceCents,
+		"winner_id":           a.WinnerID,
+		"ends_at":             a.EndsAt,
+		"top_bids":            fetchTopBids(a.ID, 5),
 	})
 
 	if hitCeiling {
-		orderErr := createOrder(a.ID, uid, req.Amount)
-		// 无论订单是否成功（可能与定时器并发重复），都广播 finished
 		ws.H.Broadcast(a.ID, gin.H{
-			"type":        "auction_finished",
-			"auction_id":  a.ID,
-			"final_price": a.CurrentPrice,
-			"winner_id":   a.WinnerID,
+			"type":              "auction_finished",
+			"auction_id":        a.ID,
+			"final_price":       a.CurrentPrice,
+			"final_price_cents": a.CurrentPriceCents,
+			"winner_id":         a.WinnerID,
 		})
-		if orderErr != nil {
-			c.JSON(http.StatusOK, gin.H{"data": gin.H{
-				"message":       "出价成功（已触达封顶价，但订单创建异常）",
-				"current_price": a.CurrentPrice,
-				"ends_at":       a.EndsAt,
-				"finished":      true,
-				"order_error":   orderErr.Error(),
-			}})
-			return
-		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": gin.H{
-		"message":       "出价成功",
-		"current_price": a.CurrentPrice,
-		"ends_at":       a.EndsAt,
-		"finished":      hitCeiling,
-	}})
+	c.JSON(http.StatusOK, response)
 }
 
 func fetchTopBids(auctionID uint, limit int) []topBidView {
@@ -154,7 +191,11 @@ func fetchTopBids(auctionID uint, limit int) []topBidView {
 		Find(&bids)
 	out := make([]topBidView, len(bids))
 	for i, b := range bids {
-		out[i] = topBidView{UserID: b.UserID, Amount: b.Amount}
+		out[i] = topBidView{
+			UserID:      b.UserID,
+			Amount:      b.Amount,
+			AmountCents: centsOrLegacy(b.AmountCents, b.Amount),
+		}
 	}
 	return out
 }

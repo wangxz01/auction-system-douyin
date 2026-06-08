@@ -22,8 +22,9 @@ import (
 func setupCommentTest(t *testing.T) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
+	config.SetActive(config.Load())
 	if config.DB == nil {
-		config.InitDB(config.Load())
+		config.InitDB(config.Get())
 	}
 	ws.InitHub()
 	r := gin.New()

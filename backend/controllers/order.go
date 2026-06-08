@@ -20,6 +20,14 @@ func GetOrder(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "订单不存在"})
 		return
 	}
+	var a models.Auction
+	if err := config.DB.First(&a, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "竞拍不存在"})
+		return
+	}
+	if !canViewOrder(c, o, a) {
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"data": o})
 }
 
@@ -28,4 +36,8 @@ func GetOrder(c *gin.Context) {
 // 定时器在 config/scheduler.go 中直接调 models.CreateOrderForAuction（避免 import 循环）。
 func createOrder(auctionID, userID uint, finalPrice float64) error {
 	return models.CreateOrderForAuction(config.DB, auctionID, userID, finalPrice)
+}
+
+func createOrderCents(auctionID, userID uint, finalPriceCents int64) error {
+	return models.CreateOrderForAuctionCents(config.DB, auctionID, userID, finalPriceCents)
 }
