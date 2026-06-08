@@ -104,16 +104,45 @@ Redis 锁是性能和削峰手段，不是唯一一致性来源。即使 Redis �
 
 ## 9. 可观测性
 
+### 9.1 指标接口
+
 `GET /api/admin/metrics` 返回：
 
-- 活跃竞拍数
-- WebSocket 房间数
-- WebSocket 在线连接数
-- 今日出价总数
-- Redis 是否可用
-- DB 是否可用
+- `active_auctions`：活跃竞拍数
+- `active_rooms` / `online_ws_connections`：WebSocket 房间数与在线连接数
+- `total_bids_today`：今日出价总数
+- `redis_available` / `db_available`：Redis / DB 健康
+- `alert_count`：当前活跃告警数（详见下文）
 
-这是轻量监控接口，生产环境后续可接 Prometheus / Grafana。
+### 9.2 告警接口
+
+`GET /api/admin/alerts` 返回结构化告警列表（仅管理员）：
+
+| code | severity | 触发条件 |
+|---|---|---|
+| `db_unavailable` | critical | DB ping 200ms 内失败 |
+| `redis_unavailable` | warning | Redis ping 200ms 内失败（系统会降级到 MySQL 行锁） |
+| `stale_active_auction` | warning | 竞拍 `ends_at` 已过但仍为 `active`，等待 5s 调度器收尾 |
+| `ws_capacity_high` | warning | WebSocket 在线连接达到 `WS_MAX_CONNECTIONS` 的 80% |
+
+告警按需实时生成（pull 模式），不入库；商家端可轮询 `/admin/metrics.alert_count` 决定是否展开详情面板。
+
+### 9.3 缓存防击穿
+
+`config/cache.go` 提供 `CacheLoadJSON(key, ttl, dest, loader)`：
+
+- 命中直接返回。
+- 未命中走 `singleflight.Group.Do`：同一进程内对相同 key 的并发未命中只执行一次 `loader`，其余 goroutine 等待同一份结果。
+- `loader` 内部再次双检 Redis，防止"先后到达的两批请求"在窗口期都执行 DB 查询。
+- 适用范围：`/auctions`（列表）、`/auctions/:id`（详情）、`/auctions/:id/stats`（统计）。
+
+单元测试 `TestCacheLoadJSONDedupsConcurrentLoads` 验证：20 个并发 goroutine 触发同一 key 的未命中加载，loader 仅执行 1 次。
+
+> 当前为单实例部署，singleflight 即够用。若未来扩展到多实例，可在 Redis 层加 `SET NX` 锁做分布式去重；现阶段不引入以减少故障面。
+
+### 9.4 后续可扩展
+
+生产环境后续可接 Prometheus / Grafana：将 `/admin/metrics` 转换为 Prometheus 文本格式即可挂载。
 
 ## 10. 已验证内容
 

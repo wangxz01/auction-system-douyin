@@ -49,11 +49,13 @@ func Register(r *gin.Engine) {
 			auth.POST("/auctions/:id/cancel", controllers.CancelAuction)
 			auth.POST("/auctions/:id/bids", controllers.PlaceBid)
 			auth.POST("/auctions/:id/comments", controllers.CreateComment)
+			auth.POST("/auctions/:id/events", controllers.CreateAuctionEvent)
 
 			auth.GET("/admin/merchants", controllers.ListMerchants)
 			auth.POST("/admin/merchants", controllers.UpsertMerchant)
 			auth.DELETE("/admin/merchants/:user_id", controllers.DisableMerchant)
 			auth.GET("/admin/metrics", controllers.GetAdminMetrics)
+			auth.GET("/admin/alerts", controllers.GetAdminAlerts)
 			auth.GET("/admin/orders", controllers.ListAdminOrders)
 			auth.POST("/admin/uploads/images", controllers.UploadImage)
 

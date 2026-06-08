@@ -32,6 +32,7 @@ func InitDB(cfg *Config) {
 		&models.Order{},
 		&models.Comment{},
 		&models.Merchant{},
+		&models.UserEvent{},
 	); err != nil {
 		log.Fatalf("❌ AutoMigrate 失败: %v", err)
 	}

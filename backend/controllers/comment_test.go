@@ -62,6 +62,7 @@ func createCommentTestAuction(t *testing.T) models.Auction {
 	}
 	t.Cleanup(func() {
 		config.DB.Where("auction_id = ?", a.ID).Delete(&models.Comment{})
+		config.DB.Where("auction_id = ?", a.ID).Delete(&models.UserEvent{})
 		config.DB.Delete(&models.Auction{}, a.ID)
 	})
 	return a

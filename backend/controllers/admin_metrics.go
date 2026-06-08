@@ -18,8 +18,10 @@ type AdminMetrics struct {
 	OnlineWSConnections int   `json:"online_ws_connections"`
 	ActiveRooms         int   `json:"active_rooms"`
 	TotalBidsToday      int64 `json:"total_bids_today"`
+	TotalEventsToday    int64 `json:"total_events_today"`
 	RedisAvailable      bool  `json:"redis_available"`
 	DBAvailable         bool  `json:"db_available"`
+	AlertCount          int   `json:"alert_count"`
 }
 
 func GetAdminMetrics(c *gin.Context) {
@@ -37,15 +39,22 @@ func GetAdminMetrics(c *gin.Context) {
 	config.DB.Model(&models.Bid{}).
 		Where("created_at >= ?", startOfDay).
 		Count(&totalBidsToday)
+	var totalEventsToday int64
+	config.DB.Model(&models.UserEvent{}).
+		Where("created_at >= ?", startOfDay).
+		Count(&totalEventsToday)
 
 	wsMetrics := ws.H.Metrics()
+	alerts := buildAdminAlerts()
 	c.JSON(http.StatusOK, gin.H{"data": AdminMetrics{
 		ActiveAuctions:      activeAuctions,
 		OnlineWSConnections: wsMetrics.OnlineConnections,
 		ActiveRooms:         wsMetrics.ActiveRooms,
 		TotalBidsToday:      totalBidsToday,
+		TotalEventsToday:    totalEventsToday,
 		RedisAvailable:      redisAvailable(),
 		DBAvailable:         dbAvailable(),
+		AlertCount:          len(alerts),
 	}})
 }
 

@@ -214,15 +214,17 @@ func UpdateAuction(c *gin.Context) {
 
 func GetAuctions(c *gin.Context) {
 	var auctions []models.Auction
-	if config.CacheGetJSON("auctions:list", &auctions) {
-		c.JSON(http.StatusOK, gin.H{"data": auctions})
-		return
-	}
-	if err := config.DB.Order("created_at DESC").Find(&auctions).Error; err != nil {
+	err := config.CacheLoadJSON("auctions:list", 2*time.Second, &auctions, func() (any, error) {
+		var list []models.Auction
+		if err := config.DB.Order("created_at DESC").Find(&list).Error; err != nil {
+			return nil, err
+		}
+		return list, nil
+	})
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	config.CacheSetJSON("auctions:list", auctions, 2*time.Second)
 	c.JSON(http.StatusOK, gin.H{"data": auctions})
 }
 
@@ -233,15 +235,17 @@ func GetAuction(c *gin.Context) {
 		return
 	}
 	var a models.Auction
-	if config.CacheGetJSON(auctionDetailCacheKey(id), &a) {
-		c.JSON(http.StatusOK, gin.H{"data": a})
-		return
-	}
-	if err := config.DB.First(&a, id).Error; err != nil {
+	loadErr := config.CacheLoadJSON(auctionDetailCacheKey(id), 2*time.Second, &a, func() (any, error) {
+		var fresh models.Auction
+		if err := config.DB.First(&fresh, id).Error; err != nil {
+			return nil, err
+		}
+		return fresh, nil
+	})
+	if loadErr != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "竞拍不存在"})
 		return
 	}
-	config.CacheSetJSON(auctionDetailCacheKey(id), a, 2*time.Second)
 	c.JSON(http.StatusOK, gin.H{"data": a})
 }
 
@@ -256,20 +260,19 @@ func GetAuctionStats(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "竞拍不存在"})
 		return
 	}
-	cacheKey := auctionStatsCacheKey(id)
-	var cached gin.H
-	if config.CacheGetJSON(cacheKey, &cached) {
-		cached["server_time"] = time.Now().UTC().Format(time.RFC3339Nano)
-		c.JSON(http.StatusOK, gin.H{"data": cached})
+	var stats gin.H
+	loadErr := config.CacheLoadJSON(auctionStatsCacheKey(id), time.Second, &stats, func() (any, error) {
+		return gin.H{
+			"bid_count":         countBids(a.ID),
+			"participant_count": countParticipants(a.ID),
+			"top_bids":          fetchTopBids(a.ID, 5),
+		}, nil
+	})
+	if loadErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": loadErr.Error()})
 		return
 	}
-	stats := gin.H{
-		"bid_count":         countBids(a.ID),
-		"participant_count": countParticipants(a.ID),
-		"top_bids":          fetchTopBids(a.ID, 5),
-		"server_time":       time.Now().UTC().Format(time.RFC3339Nano),
-	}
-	config.CacheSetJSON(cacheKey, stats, time.Second)
+	stats["server_time"] = time.Now().UTC().Format(time.RFC3339Nano)
 	c.JSON(http.StatusOK, gin.H{"data": stats})
 }
 

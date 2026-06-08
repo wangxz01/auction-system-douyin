@@ -137,6 +137,40 @@
 | 部署文档 | ✅ | `docs/deployment.md` 说明服务器部署、证书、启动和排错 |
 | 生产 API 地址 | ✅ | 前端生产环境默认使用当前域名，同源访问 `/api` 和 `wss://.../ws` |
 
+### ✅ 第十一阶段：可观测性 / 缓存防击穿 / 行为埋点（已完成）
+
+目标：补齐"竞拍状态监控、异常告警、热点 key 防击穿、用户行为采集"等评审硬性指标。
+
+| 模块 | 状态 | 说明 |
+|---|---|---|
+| 缓存防击穿 | ✅ | `config/cache.go` 新增 `CacheLoadJSON`，基于 `singleflight` 同 key 并发未命中只触发一次 loader，配套单测 `TestCacheLoadJSONDedupsConcurrentLoads` 验证 20 并发只执行 1 次 |
+| 热点读路径切换 | ✅ | `GetAuctions` / `GetAuction` / `GetAuctionStats` 三个高频接口接入新缓存 |
+| 管理端告警接口 | ✅ | `GET /api/admin/alerts` 返回 4 类结构化告警：`db_unavailable` / `redis_unavailable` / `stale_active_auction` / `ws_capacity_high` |
+| metrics 集成告警计数 | ✅ | `GET /api/admin/metrics` 新增 `alert_count` 字段，前端可轮询一个接口判断是否展开告警 |
+| 用户行为埋点 | ✅ | `models/UserEvent` 表 + `POST /api/auctions/:id/events`，记录 `event_type` / `metadata` / `user_agent` |
+| 行为指标 | ✅ | `metrics.total_events_today` 暴露今日埋点总数 |
+| 测试覆盖 | ✅ | `cache_test.go`、`admin_alerts_test.go`（权限/stale 告警/alert_count）、`event_test.go`（落库/空类型拒绝） |
+
+**告警分级：**
+
+| code | severity | 触发条件 |
+|---|---|---|
+| `db_unavailable` | critical | DB ping 200ms 内失败 |
+| `redis_unavailable` | warning | Redis ping 200ms 内失败（系统自动降级到 MySQL 行锁） |
+| `stale_active_auction` | warning | 竞拍 `ends_at` 已过但仍为 `active`，等待 5s 调度器收尾 |
+| `ws_capacity_high` | warning | WebSocket 在线连接达到 `WS_MAX_CONNECTIONS` 的 80% |
+
+**埋点请求示例：**
+
+```bash
+curl -X POST http://localhost:8080/api/auctions/123/events \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"event_type":"enter_room","metadata":"{\"source\":\"hall\"}"}'
+```
+
+详细设计见 `docs/design.md` §9 与 `docs/ai-usage.md`。
+
 ### ✅ 第五阶段：用户系统（已完成）
 
 目标：真实注册/登录、JWT 鉴权、敏感接口保护、前端身份持久化。
@@ -286,6 +320,7 @@ POST   /api/auctions/:id/start
 POST   /api/auctions/:id/cancel
 POST   /api/auctions/:id/bids
 POST   /api/auctions/:id/comments
+POST   /api/auctions/:id/events
 GET    /api/auctions/:id/order
 GET    /api/me/bids
 GET    /api/me/orders
@@ -293,6 +328,7 @@ GET    /api/admin/merchants
 POST   /api/admin/merchants
 DELETE /api/admin/merchants/:user_id
 GET    /api/admin/metrics
+GET    /api/admin/alerts
 GET    /api/admin/orders
 POST   /api/admin/uploads/images
 ```
@@ -486,6 +522,20 @@ auction-system/
 | `created_at`/`updated_at` | datetime(3) | — | |
 
 > 注册 / 登录 / JWT 鉴权由 `controllers/auth.go` + `middleware/auth.go` 提供。
+
+### `user_events`（用户行为埋点）
+
+| 字段 | 类型 | 索引 | 说明 |
+|---|---|---|---|
+| `id` | bigint unsigned | PK | |
+| `auction_id` | bigint unsigned | IDX | 哪场竞拍 |
+| `user_id` | bigint unsigned | IDX | 行为发生的用户 |
+| `event_type` | varchar(64) | IDX | 例如 `enter_room` / `click_bid_chip` / `leave_room` |
+| `metadata` | text | — | 自定义 JSON 字符串（≤ 2000 字符） |
+| `user_agent` | varchar(255) | — | 自动采集，截断到 255 字符 |
+| `created_at` | datetime(3) | — | 上报时间 |
+
+> 由 `POST /api/auctions/:id/events` 写入；管理端 `metrics.total_events_today` 暴露今日采集总量。
 
 ### 状态机
 
