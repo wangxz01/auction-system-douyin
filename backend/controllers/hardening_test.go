@@ -320,6 +320,38 @@ func TestDuplicateClientBidIDAfterCeilingIsStillIdempotent(t *testing.T) {
 	}
 }
 
+func TestRapidDifferentClientBidIDIsRateLimited(t *testing.T) {
+	r := setupCommentTest(t)
+	bidder := createNamedUser(t, "bidder-rate-limit")
+	a := createCommentTestAuction(t)
+	ends := time.Now().Add(time.Minute)
+	a.CurrentPrice = 0
+	a.StartPrice = 0
+	a.StartPriceCents = 0
+	a.CurrentPriceCents = 0
+	a.PriceStep = 1
+	a.PriceStepCents = 100
+	a.Status = "active"
+	a.EndsAt = &ends
+	if err := config.DB.Save(&a).Error; err != nil {
+		t.Fatalf("prepare auction: %v", err)
+	}
+
+	req := authReq(t, http.MethodPost, "/api/auctions/"+uintString(a.ID)+"/bids", `{"amount_cents":100,"client_bid_id":"rapid-1"}`, bidder)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("first status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	req = authReq(t, http.MethodPost, "/api/auctions/"+uintString(a.ID)+"/bids", `{"amount_cents":200,"client_bid_id":"rapid-2"}`, bidder)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("second status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestReleaseSecurityValidationRequiresSecretAndOrigins(t *testing.T) {
 	cfg := &config.Config{ServerMode: gin.ReleaseMode, JWTSecret: "", AllowedOrigins: nil}
 	if err := config.ValidateSecurity(cfg); err == nil {

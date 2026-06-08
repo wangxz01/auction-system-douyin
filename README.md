@@ -117,7 +117,11 @@
 | 毫秒倒计时 | ✅ | 前端 100ms 刷新，并根据后端 `server_time` 做时钟偏移校准 |
 | 竞价氛围 | ✅ | 领先/被超越/延时/结束 toast，价格动画，提示音，实时排行榜 |
 | 用户历史 | ✅ | `/me/bids` 浏览参与过的竞拍，`/me/orders` 浏览成交订单 |
-| 后端测试 | ✅ | 覆盖 0 元起拍、延时范围、幂等出价、实时广播元数据 |
+| 重连补偿 | ✅ | WebSocket 重连成功后重新拉取详情、统计和评论，补偿断线期间丢失消息 |
+| 轻量监控 | ✅ | `GET /api/admin/metrics` 返回活跃竞拍、WS 在线、今日出价、DB/Redis 状态 |
+| 后端限流 | ✅ | 同一用户同一竞拍 700ms 内不同幂等键重复出价返回 429 |
+| 项目材料 | ✅ | 新增 `docs/demo.md`、`docs/design.md`、`docs/ai-usage.md`、`docs/performance.md` |
+| 后端测试 | ✅ | 覆盖 0 元起拍、延时范围、幂等出价、限流、metrics、实时广播元数据 |
 
 ### ✅ 第五阶段：用户系统（已完成）
 
@@ -274,6 +278,7 @@ GET    /api/me/orders
 GET    /api/admin/merchants
 POST   /api/admin/merchants
 DELETE /api/admin/merchants/:user_id
+GET    /api/admin/metrics
 GET    /api/admin/orders
 POST   /api/admin/uploads/images
 ```
@@ -287,6 +292,7 @@ POST   /api/admin/uploads/images
 - 自动延时：`auto_extend_seconds` 只允许 10-30 秒；距 `ends_at` 不足该秒数时出价会延后结束时间
 - 封顶价命中：立即 finished + 生成订单
 - 出价幂等：前端每次点击生成 `client_bid_id`；后端通过唯一索引避免同一点击重复落库
+- 出价限流：同一用户同一竞拍 700ms 内不同 `client_bid_id` 的重复出价返回 429
 - 并发控制：Redis 可用时先抢单场竞拍短 TTL 出价锁，再进入 MySQL 事务 + `SELECT ... FOR UPDATE`
 - 读写分离：列表/详情/统计走 Redis 短 TTL 读缓存，创建/编辑/开始/取消/出价后清理缓存，写入仍以 MySQL 为准
 - 定时器幂等：用条件更新避免与封顶价路径重复生成订单
@@ -304,6 +310,11 @@ POST   /api/admin/uploads/images
 auction-system/
 ├── README.md                  # 你正在看的文件
 ├── docker-compose.yml         # 一键启动 MySQL + Redis
+├── docs/
+│   ├── demo.md                # 3-5 分钟演示闭环脚本
+│   ├── design.md              # 架构、状态机、并发和权限方案
+│   ├── ai-usage.md            # AI 使用流程和人工把控边界
+│   └── performance.md         # 压测方法、结果模板和一致性检查 SQL
 │
 ├── backend/                   # Go 后端
 │   ├── go.mod / go.sum        # Go 依赖清单
@@ -314,12 +325,15 @@ auction-system/
 │   ├── config/
 │   │   ├── config.go          # 加载 .env 配置
 │   │   ├── db.go              # GORM 连 MySQL + AutoMigrate
+│   │   ├── redis.go           # Redis 客户端 + 出价短锁
+│   │   ├── cache.go           # Redis JSON 短 TTL 读缓存
 │   │   └── scheduler.go       # 5s 定时扫描过期竞拍
 │   ├── controllers/           # 接口处理函数
 │   │   ├── health_controller.go
 │   │   ├── auth.go            # 注册 / 登录 / 当前用户
 │   │   ├── auction.go         # 竞拍 CRUD + 开始/取消（含 WS 广播）
 │   │   ├── bid.go             # 出价 + Top10 排行（含 WS 广播）
+│   │   ├── admin_metrics.go   # 管理员轻量监控指标
 │   │   ├── order.go           # 查询订单 + 内部 createOrder
 │   │   └── ws.go              # WebSocket 升级 + 心跳泵
 │   ├── middleware/
@@ -604,10 +618,10 @@ VITE_API_BASE=http://localhost:8080
 | 读写分离 | 读路径优先 Redis 短 TTL 缓存；写路径只写 MySQL 并失效缓存 |
 | 防缓存击穿 | 高频读接口 TTL 很短（统计 1s，列表/详情 2s），实时状态主要靠 WebSocket 推送 |
 | 房间隔离 | WebSocket Hub 按 `auction_id` 分房间，只向对应直播间广播 |
-| 断连重连 | 前端 `AuctionWS` 自动重连 5 次，每次间隔 3s；后端 read/write pump 心跳保活 |
+| 断连重连 | 前端 `AuctionWS` 自动重连 5 次，每次间隔 3s；重连成功后用 HTTP 重新拉取详情、统计和评论 |
 | 毫秒倒计时 | `new_bid` / `auction_started` 带 `server_time`，前端按服务器时间校准后 100ms 刷新 |
-| 防抖节流 | 前端出价按钮有提交态 + 700ms 点击间隔保护，后端仍以幂等键和事务为准 |
-| 可观测性 | 当前有健康检查、关键路径日志和测试覆盖；生产级异常告警/指标面板仍属于后续部署阶段 |
+| 防抖节流 | 前端出价按钮有提交态 + 700ms 点击间隔保护，后端同一用户同一竞拍 700ms 兜底限流 |
+| 可观测性 | 健康检查 + `/api/admin/metrics` + 关键路径日志 + 测试覆盖；生产级告警面板属于后续部署阶段 |
 
 ### 用户端功能验收
 
@@ -654,6 +668,7 @@ A: 后端 `.env` 改完要重启 `go run`；前端 `.env` 改完要重启 `npm r
 
 ## 📅 更新记录
 
+- **2026-06-09** — 补齐评审材料和可证明性：演示脚本、方案文档、AI 使用文档、压测脚本、WebSocket 重连补偿、metrics 接口和后端出价限流
 - **2026-06-09** — 补齐用户端竞价体验与高并发重点：0 元起拍、10-30 秒延时、出价幂等、Redis 锁/缓存、毫秒倒计时、实时参与人数和 AI 使用说明
 - **2026-06-08** — 补齐商家后台基础工作流：图片上传、未开始竞拍编辑、自定义延时、订单管理页
 - **2026-06-08** — 完成第七阶段：后端核心加固，出价事务锁、商家权限、订单保护、金额分字段、生产安全配置和测试覆盖

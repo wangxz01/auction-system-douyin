@@ -31,10 +31,10 @@ func Register(r *gin.Engine) {
 
 		// 公开读接口
 		api.GET("/auctions", controllers.GetAuctions)
-			api.GET("/auctions/:id", controllers.GetAuction)
-			api.GET("/auctions/:id/bids", controllers.GetBids)
-			api.GET("/auctions/:id/stats", controllers.GetAuctionStats)
-			api.GET("/auctions/:id/comments", controllers.GetComments)
+		api.GET("/auctions/:id", controllers.GetAuction)
+		api.GET("/auctions/:id/bids", controllers.GetBids)
+		api.GET("/auctions/:id/stats", controllers.GetAuctionStats)
+		api.GET("/auctions/:id/comments", controllers.GetComments)
 
 		// 需要登录的接口
 		auth := api.Group("")
@@ -53,6 +53,7 @@ func Register(r *gin.Engine) {
 			auth.GET("/admin/merchants", controllers.ListMerchants)
 			auth.POST("/admin/merchants", controllers.UpsertMerchant)
 			auth.DELETE("/admin/merchants/:user_id", controllers.DisableMerchant)
+			auth.GET("/admin/metrics", controllers.GetAdminMetrics)
 			auth.GET("/admin/orders", controllers.ListAdminOrders)
 			auth.POST("/admin/uploads/images", controllers.UploadImage)
 

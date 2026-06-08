@@ -84,6 +84,15 @@ export interface AdminOrderEntry {
   auction: Auction
 }
 
+export interface AdminMetrics {
+  active_auctions: number
+  online_ws_connections: number
+  active_rooms: number
+  total_bids_today: number
+  redis_available: boolean
+  db_available: boolean
+}
+
 export type WSMessage =
   | { type: 'auction_started'; auction_id: number; ends_at: string; server_time?: string }
   | {

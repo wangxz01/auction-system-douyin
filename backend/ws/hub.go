@@ -21,6 +21,11 @@ type roomEvent struct {
 	payload   []byte
 }
 
+type Metrics struct {
+	ActiveRooms       int `json:"active_rooms"`
+	OnlineConnections int `json:"online_ws_connections"`
+}
+
 // Hub 维护所有按 auction_id 分组的客户端连接，并通过 channel 串行化所有操作，
 // 避免并发读写 map 引发 panic。
 type Hub struct {
@@ -28,6 +33,7 @@ type Hub struct {
 	register   chan *Client
 	unregister chan *Client
 	broadcast  chan roomEvent
+	metrics    chan chan Metrics
 }
 
 // H 是全局 Hub 实例。main 启动时调 InitHub() 初始化。
@@ -39,6 +45,7 @@ func InitHub() {
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		broadcast:  make(chan roomEvent, 256),
+		metrics:    make(chan chan Metrics),
 	}
 	go H.run()
 	log.Println("✅ WebSocket Hub 已启动")
@@ -80,12 +87,26 @@ func (h *Hub) run() {
 					delete(room, c)
 				}
 			}
+		case reply := <-h.metrics:
+			m := Metrics{ActiveRooms: len(h.rooms)}
+			for _, room := range h.rooms {
+				m.OnlineConnections += len(room)
+			}
+			reply <- m
 		}
 	}
 }
 
 func (h *Hub) Register(c *Client)   { h.register <- c }
 func (h *Hub) Unregister(c *Client) { h.unregister <- c }
+func (h *Hub) Metrics() Metrics {
+	if h == nil {
+		return Metrics{}
+	}
+	reply := make(chan Metrics, 1)
+	h.metrics <- reply
+	return <-reply
+}
 
 // Broadcast 把 msg 序列化为 JSON 并推送到指定房间。
 // 如果房间不存在（没人订阅），消息直接丢弃，不会报错。

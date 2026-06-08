@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import Hls from 'hls.js'
 import { api } from '../api/client'
@@ -30,6 +30,7 @@ export function AuctionDetail() {
   const [msLeft, setMsLeft] = useState(0)
   const [comments, setComments] = useState<AuctionComment[]>([])
   const [participantCount, setParticipantCount] = useState(0)
+  const [wsStatus, setWsStatus] = useState<'open' | 'closed' | 'reconnecting'>('closed')
 
   const hasBidRef = useRef(false)
   const toastIdRef = useRef(0)
@@ -113,52 +114,71 @@ export function AuctionDetail() {
     }
   }, [auction?.stream_url, auction])
 
-  // 初始拉数据
-  useEffect(() => {
-    api.get<{ data: Auction }>(`/auctions/${auctionId}`).then((r) => {
-      setAuction(r.data.data)
-      if (r.data.data.status === 'finished') {
-        setFinished({
-          final_price: r.data.data.current_price,
-          winner_id: r.data.data.winner_id,
-        })
-      } else if (r.data.data.status === 'cancelled') {
-        setCancelled(true)
-      }
-    })
-    api.get<{ data: Bid[] }>(`/auctions/${auctionId}/bids`).then((r) => {
-      const arr = r.data.data
-      setBidCount(arr.length)
-      setTopBids(
-        arr.slice(0, 5).map((b) => ({
-          user_id: b.user_id,
-          amount: b.amount,
-          amount_cents: b.amount_cents ?? Math.round(b.amount * 100),
-        })),
-      )
-      if (arr.some((b) => b.user_id === uid)) hasBidRef.current = true
-    })
-    api.get<{ data: AuctionStats }>(`/auctions/${auctionId}/stats`).then((r) => {
-      const stats = r.data.data
-      setBidCount(stats.bid_count)
-      setParticipantCount(stats.participant_count)
-      setTopBids(stats.top_bids)
-      syncServerTime(stats.server_time)
-      if (stats.top_bids.some((b) => b.user_id === uid)) hasBidRef.current = true
-    })
-    api.get<{ data: AuctionComment[] }>(`/auctions/${auctionId}/comments`).then((r) => {
-      setComments(r.data.data)
-    })
+  const loadSnapshot = useCallback(async () => {
+    const [auctionResp, bidsResp, statsResp, commentsResp] = await Promise.all([
+      api.get<{ data: Auction }>(`/auctions/${auctionId}`),
+      api.get<{ data: Bid[] }>(`/auctions/${auctionId}/bids`),
+      api.get<{ data: AuctionStats }>(`/auctions/${auctionId}/stats`),
+      api.get<{ data: AuctionComment[] }>(`/auctions/${auctionId}/comments`),
+    ])
+
+    const freshAuction = auctionResp.data.data
+    setAuction(freshAuction)
+    setFinished(null)
+    setCancelled(false)
+    if (freshAuction.status === 'finished') {
+      setFinished({
+        final_price: freshAuction.current_price,
+        winner_id: freshAuction.winner_id,
+      })
+    } else if (freshAuction.status === 'cancelled') {
+      setCancelled(true)
+    }
+
+    const bids = bidsResp.data.data
+    setBidCount(bids.length)
+    setTopBids(
+      bids.slice(0, 5).map((b) => ({
+        user_id: b.user_id,
+        amount: b.amount,
+        amount_cents: b.amount_cents ?? Math.round(b.amount * 100),
+      })),
+    )
+    if (bids.some((b) => b.user_id === uid)) hasBidRef.current = true
+
+    const stats = statsResp.data.data
+    setBidCount(stats.bid_count)
+    setParticipantCount(stats.participant_count)
+    setTopBids(stats.top_bids)
+    syncServerTime(stats.server_time)
+    if (stats.top_bids.some((b) => b.user_id === uid)) hasBidRef.current = true
+
+    setComments(commentsResp.data.data)
   }, [auctionId, uid])
+
+  // 初始拉数据；WebSocket 重连成功后也复用同一个快照补偿逻辑。
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadSnapshot(), 0)
+    return () => window.clearTimeout(timer)
+  }, [loadSnapshot])
 
   // WebSocket
   useEffect(() => {
     if (!auctionId) return
-    const ws = new AuctionWS(auctionId, (msg: WSMessage) => handleMessage(msg))
+    const ws = new AuctionWS(
+      auctionId,
+      (msg: WSMessage) => handleMessage(msg),
+      (status) => {
+        setWsStatus(status)
+        if (status === 'open') {
+          void loadSnapshot()
+        }
+      },
+    )
     ws.connect()
     return () => ws.close()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auctionId])
+  }, [auctionId, loadSnapshot])
 
   // 倒计时：100ms 刷新，并用后端 server_time 校准本机时钟偏移。
   useEffect(() => {
@@ -389,6 +409,14 @@ export function AuctionDetail() {
       {/* 渐变遮罩 */}
       <div className="live-overlay-top" />
       <div className="live-overlay-bottom" />
+
+      {wsStatus !== 'open' && (
+        <div className="absolute left-3 right-3 z-20" style={{ top: 'calc(var(--safe-top) + 88px)' }}>
+          <div className="live-glass px-3 py-2 text-white/85 text-xs">
+            {wsStatus === 'reconnecting' ? '正在重连并同步最新状态...' : '实时连接已断开'}
+          </div>
+        </div>
+      )}
 
       {/* 顶部：主播 + 关注 —— 玻璃胶囊统一框 */}
       <div

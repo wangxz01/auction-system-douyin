@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
-import type { Auction } from '../lib/types'
+import type { AdminMetrics, Auction } from '../lib/types'
 import { StatusBadge } from '../components/StatusBadge'
 
 export function AdminList() {
   const nav = useNavigate()
   const [auctions, setAuctions] = useState<Auction[]>([])
+  const [metrics, setMetrics] = useState<AdminMetrics | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -19,6 +20,10 @@ export function AdminList() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
+    api
+      .get<{ data: AdminMetrics }>('/admin/metrics')
+      .then((r) => setMetrics(r.data.data))
+      .catch(() => setMetrics(null))
   }
 
   useEffect(() => {
@@ -67,6 +72,16 @@ export function AdminList() {
         <span>全部竞拍</span>
         {!loading && <span className="text-[#8E8E93]">{auctions.length} 件</span>}
       </div>
+
+      {metrics && (
+        <div className="grid grid-cols-5 gap-3 mb-5">
+          <Metric label="活跃竞拍" value={metrics.active_auctions} />
+          <Metric label="WS 在线" value={metrics.online_ws_connections} />
+          <Metric label="直播间" value={metrics.active_rooms} />
+          <Metric label="今日出价" value={metrics.total_bids_today} />
+          <Metric label="基础设施" value={`${metrics.db_available ? 'DB 正常' : 'DB 异常'} / ${metrics.redis_available ? 'Redis 正常' : 'Redis 降级'}`} />
+        </div>
+      )}
 
       {loading && (
         <div className="bg-white rounded-2xl p-12 text-center text-[#8E8E93]">加载中...</div>
@@ -154,6 +169,15 @@ export function AdminList() {
           </table>
         </div>
       )}
+    </div>
+  )
+}
+
+function Metric({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="bg-white rounded-2xl px-4 py-3">
+      <div className="text-xs text-[#8E8E93] mb-1">{label}</div>
+      <div className="text-lg font-semibold text-[#1d1d1f] truncate">{value}</div>
     </div>
   )
 }

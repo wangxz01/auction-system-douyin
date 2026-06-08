@@ -32,6 +32,7 @@ type placeBidReq struct {
 
 const (
 	autoExtendThreshold = 30 * time.Second
+	bidRateLimitWindow  = 700 * time.Millisecond
 )
 
 func PlaceBid(c *gin.Context) {
@@ -115,6 +116,13 @@ func PlaceBid(c *gin.Context) {
 		if a.EndsAt == nil || !now.Before(*a.EndsAt) {
 			status = http.StatusBadRequest
 			response = gin.H{"error": "竞拍已结束"}
+			return handled
+		}
+		if rateLimited, err := isBidRateLimited(tx, a.ID, uid, now); err != nil {
+			return err
+		} else if rateLimited {
+			status = http.StatusTooManyRequests
+			response = gin.H{"error": "出价太频繁，请稍后再试"}
 			return handled
 		}
 
@@ -286,6 +294,14 @@ func countParticipantsTx(db *gorm.DB, auctionID uint) int64 {
 		Distinct("user_id").
 		Count(&count)
 	return count
+}
+
+func isBidRateLimited(db *gorm.DB, auctionID uint, userID uint, now time.Time) (bool, error) {
+	var count int64
+	err := db.Model(&models.Bid{}).
+		Where("auction_id = ? AND user_id = ? AND created_at >= ?", auctionID, userID, now.Add(-bidRateLimitWindow)).
+		Count(&count).Error
+	return count > 0, err
 }
 
 func GetBids(c *gin.Context) {

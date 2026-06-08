@@ -238,3 +238,46 @@ func TestNewBidBroadcastIncludesRealtimeMetadata(t *testing.T) {
 		t.Fatal("timed out waiting for new_bid broadcast")
 	}
 }
+
+func TestAdminMetricsRequiresAdminAndReturnsSnapshot(t *testing.T) {
+	t.Setenv("ADMIN_USERNAMES", "metrics-admin")
+	r := setupCommentTest(t)
+	admin := createNamedUser(t, "metrics-admin")
+	regular := createNamedUser(t, "metrics-regular")
+	a := createCommentTestAuction(t)
+	a.Status = "active"
+	if err := config.DB.Save(&a).Error; err != nil {
+		t.Fatalf("prepare auction: %v", err)
+	}
+
+	req := authReq(t, http.MethodGet, "/api/admin/metrics", "", regular)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("regular status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	req = authReq(t, http.MethodGet, "/api/admin/metrics", "", admin)
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("admin status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Data struct {
+			ActiveAuctions      int64 `json:"active_auctions"`
+			OnlineWSConnections int   `json:"online_ws_connections"`
+			ActiveRooms         int   `json:"active_rooms"`
+			TotalBidsToday      int64 `json:"total_bids_today"`
+			RedisAvailable      bool  `json:"redis_available"`
+			DBAvailable         bool  `json:"db_available"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode metrics: %v", err)
+	}
+	if resp.Data.ActiveAuctions < 1 || !resp.Data.DBAvailable {
+		t.Fatalf("unexpected metrics: %+v", resp.Data)
+	}
+}
