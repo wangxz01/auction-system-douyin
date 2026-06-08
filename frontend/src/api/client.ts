@@ -1,7 +1,10 @@
 import axios from 'axios'
 import { clearAuth, getToken } from '../lib/auth'
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
+const configuredBase = (import.meta.env.VITE_API_BASE ?? '').trim()
+const API_BASE =
+  configuredBase ||
+  (import.meta.env.DEV ? 'http://localhost:8080' : window.location.origin)
 
 export const api = axios.create({
   baseURL: `${API_BASE}/api`,
@@ -33,6 +36,7 @@ api.interceptors.response.use(
 )
 
 export function wsUrl(auctionId: number): string {
-  const base = API_BASE.replace(/^http/, 'ws')
-  return `${base}/ws/auctions/${auctionId}`
+  const url = new URL(`/ws/auctions/${auctionId}`, API_BASE)
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+  return url.toString()
 }

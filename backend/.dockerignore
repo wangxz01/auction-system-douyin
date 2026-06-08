@@ -1,0 +1,7 @@
+.env
+*.log
+bin/
+tmp/
+uploads/
+coverage.out
+**/*_test.go

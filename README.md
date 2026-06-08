@@ -123,6 +123,20 @@
 | 项目材料 | ✅ | 新增 `docs/demo.md`、`docs/design.md`、`docs/ai-usage.md`、`docs/performance.md` |
 | 后端测试 | ✅ | 覆盖 0 元起拍、延时范围、幂等出价、限流、metrics、实时广播元数据 |
 
+### ✅ 第十阶段：生产部署准备（已完成）
+
+目标：补齐部署到自有服务器和域名所需的生产文件与说明；真实上线需替换域名、证书和强密码。
+
+| 模块 | 状态 | 说明 |
+|---|---|---|
+| 后端镜像 | ✅ | `backend/Dockerfile` 多阶段构建 Go release 二进制 |
+| 前端镜像 | ✅ | `frontend/Dockerfile` 构建静态资源并用 Nginx 托管 |
+| 生产编排 | ✅ | `deploy/docker-compose.prod.yml` 编排 MySQL、Redis、后端、前端、Nginx |
+| Nginx 反代 | ✅ | `deploy/nginx.conf` 支持 `/api`、`/ws`、`/uploads` 和 HTTPS |
+| 生产环境模板 | ✅ | `deploy/.env.prod.example` 列出 release 必填配置 |
+| 部署文档 | ✅ | `docs/deployment.md` 说明服务器部署、证书、启动和排错 |
+| 生产 API 地址 | ✅ | 前端生产环境默认使用当前域名，同源访问 `/api` 和 `wss://.../ws` |
+
 ### ✅ 第五阶段：用户系统（已完成）
 
 目标：真实注册/登录、JWT 鉴权、敏感接口保护、前端身份持久化。
@@ -298,9 +312,9 @@ POST   /api/admin/uploads/images
 - 定时器幂等：用条件更新避免与封顶价路径重复生成订单
 - 订单表 `auction_id` 加唯一索引，双保险
 
-### ⏳ 后续阶段（未开始）
+### ⏳ 后续阶段（待真实服务器信息）
 
-- **第七阶段**：生产部署（Dockerfile + Nginx + 域名 + HTTPS）
+- 替换真实域名、生产密码和 HTTPS 证书后，在你的服务器执行部署。
 
 ---
 
@@ -314,9 +328,15 @@ auction-system/
 │   ├── demo.md                # 3-5 分钟演示闭环脚本
 │   ├── design.md              # 架构、状态机、并发和权限方案
 │   ├── ai-usage.md            # AI 使用流程和人工把控边界
-│   └── performance.md         # 压测方法、结果模板和一致性检查 SQL
+│   ├── performance.md         # 压测方法、结果模板和一致性检查 SQL
+│   └── deployment.md          # 生产服务器部署说明
+├── deploy/
+│   ├── docker-compose.prod.yml # 生产 Docker Compose 编排
+│   ├── nginx.conf              # HTTPS / API / WS 反向代理模板
+│   └── .env.prod.example       # 生产环境变量模板
 │
 ├── backend/                   # Go 后端
+│   ├── Dockerfile              # 后端生产镜像
 │   ├── go.mod / go.sum        # Go 依赖清单
 │   ├── .env                   # 真实配置（不要提交 git）
 │   ├── .env.example           # 配置模板（可提交）
@@ -348,6 +368,8 @@ auction-system/
 │       └── order.go           # 含 CreateOrderForAuction 工具函数
 │
 └── frontend/                  # React + TypeScript 前端
+    ├── Dockerfile              # 前端生产镜像
+    ├── nginx.default.conf      # 前端容器内静态资源 Nginx 配置
     ├── package.json
     ├── .env                   # VITE_API_BASE 指向后端
     ├── vite.config.ts         # 含 @tailwindcss/vite 插件
@@ -668,6 +690,7 @@ A: 后端 `.env` 改完要重启 `go run`；前端 `.env` 改完要重启 `npm r
 
 ## 📅 更新记录
 
+- **2026-06-09** — 补齐生产部署准备：后端/前端 Dockerfile、生产 Compose、Nginx HTTPS 反代模板、生产环境变量模板和部署文档
 - **2026-06-09** — 补齐评审材料和可证明性：演示脚本、方案文档、AI 使用文档、压测脚本、WebSocket 重连补偿、metrics 接口和后端出价限流
 - **2026-06-09** — 补齐用户端竞价体验与高并发重点：0 元起拍、10-30 秒延时、出价幂等、Redis 锁/缓存、毫秒倒计时、实时参与人数和 AI 使用说明
 - **2026-06-08** — 补齐商家后台基础工作流：图片上传、未开始竞拍编辑、自定义延时、订单管理页
