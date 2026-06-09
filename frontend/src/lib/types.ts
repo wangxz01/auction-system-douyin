@@ -89,8 +89,17 @@ export interface AdminMetrics {
   online_ws_connections: number
   active_rooms: number
   total_bids_today: number
+  total_events_today?: number
   redis_available: boolean
   db_available: boolean
+  alert_count?: number
+}
+
+export interface AdminAlert {
+  severity: 'critical' | 'warning' | 'info'
+  code: string
+  message: string
+  created_at: string
 }
 
 export type WSMessage =

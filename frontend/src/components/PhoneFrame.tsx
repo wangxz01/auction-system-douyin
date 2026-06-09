@@ -5,13 +5,13 @@ import { useTitle } from '../lib/useTitle'
 export function PhoneFrame({ children }: { children: ReactNode }) {
   useTitle('Auction — 用户版')
   if (isMobileUA()) {
-    return <>{children}</>
+    return <div className="surface-hall">{children}</div>
   }
   return (
     <div className="phone-wrap">
       <div className="phone-bezel">
         <div className="phone-screen">
-          <div className="phone-content">{children}</div>
+          <div className="phone-content surface-hall">{children}</div>
         </div>
       </div>
     </div>

@@ -1,6 +1,8 @@
 import { useNavigate } from 'react-router-dom'
 import { clearAuth, getUser } from '../lib/auth'
 import { BottomNav } from '../components/BottomNav'
+import { IconCatalog, IconReceipt, IconUser } from '../lib/icons'
+import { paddleNumberOf } from '../lib/paddle'
 
 export function Me() {
   const nav = useNavigate()
@@ -21,19 +23,31 @@ export function Me() {
       <div className="px-4 mt-2">
         <div className="bg-white rounded-2xl px-5 py-5 flex items-center gap-4">
           <div
-            className="w-14 h-14 rounded-full flex items-center justify-center text-xl text-white font-bold shrink-0"
+            className="w-14 h-14 rounded-full flex items-center justify-center text-white shrink-0"
             style={{
               background: 'linear-gradient(135deg, #FFD451 0%, #FF9500 100%)',
               boxShadow: '0 4px 10px rgba(255,149,0,0.25)',
             }}
+            aria-hidden="true"
           >
-            {me ? me.username.slice(0, 1).toUpperCase() : '👤'}
+            {me ? (
+              <span className="text-xl font-bold">
+                {me.username.slice(0, 1).toUpperCase()}
+              </span>
+            ) : (
+              <IconUser size={26} />
+            )}
           </div>
           <div className="flex-1 min-w-0">
             {me ? (
               <>
                 <div className="text-lg font-semibold truncate">{me.username}</div>
-                <div className="text-xs text-[#8E8E93] mt-0.5">UID #{me.user_id}</div>
+                <div
+                  className="text-xs mt-0.5 font-catalog tabular-nums"
+                  style={{ color: 'var(--hall-ink-mute)' }}
+                >
+                  号牌 {paddleNumberOf(me.user_id)}
+                </div>
               </>
             ) : (
               <>
@@ -70,7 +84,9 @@ export function Me() {
             nav('/me/bids')
           }}
         >
-          <span className="text-xl w-7 text-center">📜</span>
+          <span className="w-7 flex items-center justify-center" style={{ color: 'var(--hall-velvet)' }}>
+            <IconCatalog size={20} />
+          </span>
           <span className="flex-1">我的拍卖记录</span>
         </button>
         <button
@@ -80,7 +96,9 @@ export function Me() {
             nav('/me/orders')
           }}
         >
-          <span className="text-xl w-7 text-center">📋</span>
+          <span className="w-7 flex items-center justify-center" style={{ color: 'var(--hall-velvet)' }}>
+            <IconReceipt size={20} />
+          </span>
           <span className="flex-1">我的订单</span>
         </button>
       </div>

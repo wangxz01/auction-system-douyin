@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Auction, Bid, Order } from '../lib/types'
 import { StatusBadge } from '../components/StatusBadge'
+import { paddleNumberOf } from '../lib/paddle'
 
 export function AdminAuctionDetail() {
   const { id } = useParams<{ id: string }>()
@@ -228,7 +229,7 @@ export function AdminAuctionDetail() {
             <span className="text-[#FF9500] text-base font-bold">¥{auction.current_price}</span>
           }
         />
-        <Row label="领先者" value={auction.winner_id ? `UID ${auction.winner_id}` : '尚无'} />
+        <Row label="领先者" value={auction.winner_id ? paddleNumberOf(auction.winner_id) : '尚无'} />
       </div>
 
       {/* 时间 */}
@@ -257,7 +258,7 @@ export function AdminAuctionDetail() {
               style={{ borderTop: i === 0 ? 'none' : undefined }}
             >
               <span className="w-8 text-xs text-[#8E8E93]">#{i + 1}</span>
-              <span className="flex-1 text-[15px]">UID {b.user_id}</span>
+              <span className="flex-1 text-[15px]">{paddleNumberOf(b.user_id)}</span>
               <span className="font-semibold">¥{b.amount}</span>
               <span className="text-xs text-[#8E8E93] w-32 text-right">
                 {fmt(b.created_at)}
@@ -272,7 +273,7 @@ export function AdminAuctionDetail() {
       {order ? (
         <div className="ios-list ios-list-flush">
           <Row label="订单号" value={`#${order.id}`} mono />
-          <Row label="买家" value={`UID ${order.user_id}`} />
+          <Row label="买家" value={paddleNumberOf(order.user_id)} />
           <Row
             label="成交价"
             value={

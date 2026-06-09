@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Auction, AuctionStatus } from '../lib/types'
-import { StatusBadge } from '../components/StatusBadge'
 import { BottomNav } from '../components/BottomNav'
+import { lotNumberOf } from '../lib/paddle'
 
 type Filter = 'all' | 'active' | 'pending'
 
@@ -38,10 +38,10 @@ export function UserHall() {
 
   return (
     <div className="min-h-screen max-w-md mx-auto pb-28">
-      {/* iOS 大标题 */}
-      <div className="px-5 pt-5 pb-3">
-        <h1 className="ios-large-title">拍卖大厅</h1>
-        <p className="text-sm text-[#8E8E93] mt-1">实时竞拍 · 价高者得</p>
+      {/* 拍卖行 hero（衬线大标题 + 帷幕色） */}
+      <div className="px-5 pt-6 pb-4">
+        <h1 className="hall-hero-title">拍卖行</h1>
+        <p className="hall-hero-sub">Lots · Live Bidding</p>
       </div>
 
       {/* 过滤 */}
@@ -61,58 +61,92 @@ export function UserHall() {
         </div>
       </div>
 
-      {/* 分组标题 + 卡片列表 */}
-      <div className="ios-section-header mt-5">
-        <span>{filter === 'all' ? '全部商品' : filter === 'active' ? '进行中' : '即将开始'}</span>
-        {!loading && <span className="text-[#8E8E93]">{list.length} 件</span>}
+      {/* 计数（场刊感） */}
+      <div
+        className="mt-6 mb-3 px-5 flex items-baseline justify-between font-catalog"
+        style={{ color: 'var(--hall-ink-mute)' }}
+      >
+        <span
+          className="text-[11px] tracking-[0.18em] uppercase"
+          style={{ color: 'var(--hall-velvet)' }}
+        >
+          {filter === 'all' ? 'All Lots' : filter === 'active' ? 'Live' : 'Upcoming'}
+        </span>
+        {!loading && <span className="text-xs tabular-nums">{list.length} 件</span>}
       </div>
 
-      <div className="px-4 space-y-3">
+      {/* 拍品卡列表 */}
+      <div className="px-4 space-y-4">
         {loading && (
-          <div className="bg-white rounded-2xl p-12 text-center text-[#8E8E93]">加载中...</div>
+          <div
+            className="rounded text-center py-12 text-sm"
+            style={{
+              background: 'var(--hall-ivory-soft)',
+              border: '1px solid var(--hall-ivory-rim)',
+              color: 'var(--hall-ink-mute)',
+              fontFamily: 'var(--font-catalog)',
+            }}
+          >
+            Loading…
+          </div>
         )}
         {!loading && list.length === 0 && (
-          <div className="bg-white rounded-2xl p-12 text-center text-[#8E8E93]">
-            <div className="text-4xl mb-2">📭</div>
-            <div className="text-sm">暂无竞拍</div>
+          <div
+            className="rounded text-center py-12 text-sm font-catalog"
+            style={{
+              background: 'var(--hall-ivory-soft)',
+              border: '1px solid var(--hall-ivory-rim)',
+              color: 'var(--hall-ink-mute)',
+            }}
+          >
+            本场暂无拍品
           </div>
         )}
         {list.map((a, idx) => (
           <Link
             key={a.id}
             to={`/auction/${a.id}`}
-            className="block bg-white rounded-2xl overflow-hidden fade-up active:opacity-70 transition-opacity"
-            style={{ animationDelay: `${idx * 35}ms` }}
+            className="lot-card fade-up"
+            style={{ animationDelay: `${idx * 40}ms` }}
           >
-            <div className="flex">
+            <div className="lot-card-media">
               {a.image_url ? (
                 <img
                   src={a.image_url}
                   alt={a.title}
-                  className="w-24 h-24 object-cover bg-[#F2F2F7]"
                   onError={(e) => {
                     ;(e.currentTarget as HTMLImageElement).style.display = 'none'
                   }}
                 />
-              ) : (
-                <div className="w-24 h-24 flex items-center justify-center text-3xl bg-[#F2F2F7]">
-                  📦
+              ) : null}
+              <span className="lot-stamp">{lotNumberOf(a.id)}</span>
+              {a.status === 'active' && (
+                <span className="lot-live">
+                  <span className="pulse" />
+                  Live
+                </span>
+              )}
+            </div>
+
+            <div className="lot-card-body">
+              <div className="lot-card-title">{a.title}</div>
+              <div className="lot-card-rule" />
+              <div className="lot-card-row">
+                <span className="label">{a.status === 'active' ? '当前价' : '起拍价'}</span>
+                <span className="value current">
+                  ¥{Number(a.current_price || a.start_price).toLocaleString()}
+                </span>
+              </div>
+              <div className="lot-card-row mt-1">
+                <span className="label">加价</span>
+                <span className="value">¥{a.price_step}</span>
+              </div>
+              {a.ceiling_price && (
+                <div className="lot-card-row mt-1">
+                  <span className="label">封顶</span>
+                  <span className="value">¥{Number(a.ceiling_price).toLocaleString()}</span>
                 </div>
               )}
-              <div className="flex-1 p-3 flex flex-col justify-between min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                  <h2 className="font-semibold leading-snug text-[#000] truncate">{a.title}</h2>
-                  <StatusBadge status={a.status} />
-                </div>
-                <div>
-                  <p className="text-[11px] text-[#8E8E93]">当前价</p>
-                  <p className="text-xl font-bold text-[#FF9500]">¥{a.current_price}</p>
-                  <p className="text-[11px] text-[#8E8E93] mt-1 truncate">
-                    起拍 ¥{a.start_price} · +¥{a.price_step}
-                    {a.ceiling_price ? ` · 封顶 ¥${a.ceiling_price}` : ''}
-                  </p>
-                </div>
-              </div>
             </div>
           </Link>
         ))}

@@ -40,3 +40,8 @@ export function wsUrl(auctionId: number): string {
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
   return url.toString()
 }
+
+// 给 lib/events.ts 用：直接拼绝对路径，避免引用 axios 客户端时产生循环依赖。
+export function apiBase(): string {
+  return API_BASE
+}

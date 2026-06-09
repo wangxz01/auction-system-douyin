@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { setAuth } from '../lib/auth'
+import { IconAlert, IconGavel } from '../lib/icons'
 
 type Mode = 'login' | 'register'
 
@@ -44,9 +45,28 @@ export function Login() {
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm card p-8 fade-up">
         <div className="text-center mb-6">
-          <div className="text-5xl mb-2">🏷️</div>
-          <h1 className="text-2xl font-bold tracking-tight">拍卖系统</h1>
-          <p className="text-xs text-ink-500 mt-1">登录后参与实时竞拍</p>
+          <div
+            className="inline-flex items-center justify-center mb-3"
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: 4,
+              background:
+                'linear-gradient(180deg, var(--hall-paddle-hi, #E5C57E) 0%, var(--hall-paddle, #B8862C) 60%, var(--hall-paddle-lo, #7E5A18) 100%)',
+              color: '#2A1908',
+              border: '1px solid rgba(126, 90, 24, 0.55)',
+              boxShadow:
+                'inset 0 1px 0 rgba(255, 240, 200, 0.6), inset 0 -1px 0 rgba(80, 50, 0, 0.35), 0 4px 12px rgba(80, 50, 0, 0.2)',
+            }}
+          >
+            <IconGavel size={28} />
+          </div>
+          <h1 className="font-catalog text-2xl tracking-tight" style={{ color: 'var(--hall-velvet)', fontWeight: 600 }}>
+            拍卖系统
+          </h1>
+          <p className="text-xs mt-1" style={{ color: 'var(--hall-ink-mute)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+            Live Bidding · Members
+          </p>
         </div>
 
         <div className="pill-group w-full mb-6 grid grid-cols-2">
@@ -96,8 +116,9 @@ export function Login() {
           </label>
 
           {error && (
-            <div className="text-sm text-rose-600 bg-rose-50 rounded-xl px-3 py-2 border border-rose-200">
-              ⚠ {error}
+            <div className="text-sm text-rose-600 bg-rose-50 rounded-xl px-3 py-2 border border-rose-200 inline-flex items-center gap-2">
+              <IconAlert size={16} />
+              <span>{error}</span>
             </div>
           )}
 

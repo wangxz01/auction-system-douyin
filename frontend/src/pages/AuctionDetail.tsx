@@ -5,6 +5,10 @@ import { api } from '../api/client'
 import { getUser, isLoggedIn } from '../lib/auth'
 import { AuctionWS } from '../lib/ws'
 import type { Auction, AuctionComment, AuctionStats, Bid, TopBid, WSMessage } from '../lib/types'
+import { lotNumberOf, paddleNumberOf } from '../lib/paddle'
+import { trackEvent } from '../lib/events'
+import { IconBan, IconGavel, IconTrophy } from '../lib/icons'
+import type { ComponentType, SVGProps } from 'react'
 
 // 兜底本地视频（放在 public/ 下，可被 / 直接访问）
 const FALLBACK_VIDEO = '/live.mp4'
@@ -162,6 +166,22 @@ export function AuctionDetail() {
     return () => window.clearTimeout(timer)
   }, [loadSnapshot])
 
+  // 行为埋点：进房 / 离房（fire-and-forget，仅登录用户）
+  useEffect(() => {
+    if (!auctionId) return
+    trackEvent(auctionId, 'enter_room', {
+      ts: Date.now(),
+      ua_screen: typeof window !== 'undefined' ? `${window.innerWidth}x${window.innerHeight}` : '',
+    })
+    const onUnload = () => trackEvent(auctionId, 'leave_room', { ts: Date.now() })
+    window.addEventListener('beforeunload', onUnload)
+    return () => {
+      window.removeEventListener('beforeunload', onUnload)
+      // 切换路由时也算离房
+      trackEvent(auctionId, 'leave_room', { ts: Date.now(), reason: 'route_change' })
+    }
+  }, [auctionId])
+
   // WebSocket
   useEffect(() => {
     if (!auctionId) return
@@ -224,14 +244,14 @@ export function AuctionDetail() {
       setPriceFlashKey((k) => k + 1)
 
       if (msg.winner_id === uid) {
-        pushToast('win', '🎉 领先！')
+        pushToast('win', `${paddleNumberOf(uid)} 领先`)
         playCue('win')
       } else if (hasBidRef.current) {
-        pushToast('lose', '⚡ 被超越！')
+        pushToast('lose', `被 ${paddleNumberOf(msg.winner_id)} 超越`)
         playCue('lose')
       }
       if (msg.auto_extended) {
-        pushToast('info', `⏱ 竞拍延时 ${msg.auto_extend_seconds} 秒`)
+        pushToast('info', `延时 ${msg.auto_extend_seconds} 秒`)
       }
     } else if (msg.type === 'auction_finished') {
       syncServerTime(msg.server_time)
@@ -294,6 +314,10 @@ export function AuctionDetail() {
     }
     lastBidAtRef.current = now
     setSubmitting(true)
+    trackEvent(auctionId, 'bid_submit', {
+      amount: effectiveBidAmount,
+      multiplier: matchedMultiplier || null,
+    })
     try {
       await api.post(`/auctions/${auctionId}/bids`, {
         amount: effectiveBidAmount,
@@ -354,8 +378,10 @@ export function AuctionDetail() {
     )
   }
 
+  const isCrisis = auction.status === 'active' && msLeft > 0 && msLeft < 10_000
+
   return (
-    <div className="live-room">
+    <div className={`live-room${isCrisis ? ' crisis' : ''}`}>
       {/* 背景层：仅在 contain 模式（横屏视频）时显示，避免单调黑边 */}
       {fitMode === 'contain' && (
         <video
@@ -418,32 +444,48 @@ export function AuctionDetail() {
         </div>
       )}
 
-      {/* 顶部：主播 + 关注 —— 玻璃胶囊统一框 */}
+      {/* 顶部：拍品编号 + 主标题 —— 拍卖目录风（衬线 + 烫印号） */}
       <div
         className="absolute left-3 right-3 z-10"
         style={{ top: 'var(--safe-top)' }}
       >
-        <div className="live-glass-pill flex items-center gap-2 pl-1 pr-3 py-1">
-          <div
-            className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
-            style={{ background: 'linear-gradient(135deg, #FE2C55, #FF6B85)' }}
+        <div className="live-glass-pill flex items-center gap-2.5 pl-2.5 pr-3 py-1.5">
+          <span
+            className="font-catalog tabular-nums shrink-0"
+            style={{
+              fontSize: 11,
+              letterSpacing: '0.08em',
+              color: 'rgba(255, 240, 220, 0.95)',
+              background: 'rgba(184, 134, 44, 0.32)',
+              border: '1px solid rgba(229, 197, 126, 0.55)',
+              padding: '1px 7px 2px',
+              borderRadius: 2,
+              textTransform: 'uppercase',
+            }}
           >
-            {auction.title.slice(0, 1).toUpperCase()}
-          </div>
+            {lotNumberOf(auctionId)}
+          </span>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="text-white text-[13px] font-semibold truncate">
-                {auction.title}的直播间
+              <span
+                className="font-catalog text-white truncate"
+                style={{ fontSize: 14, fontWeight: 600 }}
+              >
+                {auction.title}
               </span>
-              <span className="px-1 py-px bg-[#FE2C55] text-[9px] rounded font-bold text-white tracking-wider">
+              <span className="px-1 py-px bg-[#C8102E] text-[9px] rounded-sm font-bold text-white tracking-wider">
                 LIVE
               </span>
             </div>
-            <div className="text-white/75 text-[10px] mt-px">👥 {viewers} 人在看</div>
+            <div className="text-white/70 text-[10px] mt-px tabular-nums">
+              {viewers.toLocaleString()} 在场 · {participantCount} 举牌
+            </div>
           </div>
-          <button className="live-text-btn white text-sm shrink-0" style={{ padding: '2px 8px' }}>
-            + 关注
-          </button>
+          {uid > 0 && (
+            <span className="paddle-badge sm shrink-0" title="你的号牌">
+              {paddleNumberOf(uid)}
+            </span>
+          )}
         </div>
       </div>
 
@@ -466,9 +508,9 @@ export function AuctionDetail() {
           className="absolute right-3 z-10 w-36 live-glass p-2.5"
           style={{ top: 'calc(var(--safe-top) + 108px)' }}
         >
-          <div className="text-[11px] text-white/75 mb-1.5 px-1 flex items-center gap-1 font-medium">
-            <span>🏆</span>
-            <span>出价榜</span>
+          <div className="text-[11px] text-white/75 mb-1.5 px-1 flex items-center gap-1.5 font-catalog tracking-wider uppercase">
+            <IconTrophy size={12} />
+            <span>Leaderboard</span>
           </div>
           <div className="space-y-1.5">
             {topBids.slice(0, 5).map((b, i) => (
@@ -485,11 +527,15 @@ export function AuctionDetail() {
                 >
                   {i + 1}
                 </span>
-                <span className="truncate flex-1 text-white/90">
-                  UID {b.user_id}
-                  {b.user_id === uid && <span className="text-[#FFD451] ml-0.5">·你</span>}
+                <span className="truncate flex-1 text-white/90 font-catalog tabular-nums">
+                  {paddleNumberOf(b.user_id)}
+                  {b.user_id === uid && <span className="text-[#FFD451] ml-1">·你</span>}
                 </span>
-                <span className={`font-bold ${i === 0 ? 'text-[#FFD451]' : 'text-white'}`}>
+                <span
+                  className={`font-catalog tabular-nums font-bold ${
+                    i === 0 ? 'text-[#FFD451]' : 'text-white'
+                  }`}
+                >
                   ¥{b.amount}
                 </span>
               </div>
@@ -498,11 +544,12 @@ export function AuctionDetail() {
         </div>
       )}
 
-      {/* 弹幕（左下，商品卡上方） */}
-      <div className="absolute bottom-[170px] left-3 right-32 z-10 pointer-events-none flex flex-col items-start">
-        {comments.slice(-3).map((c) => (
-          <div key={c.id} className="comment-bubble fade-up">
-            {c.username}: {c.content}
+      {/* 拍卖师弹幕滚带：每条评论从右滑入，向左淡出，三行错开 */}
+      <div className="ticker-tape" style={{ bottom: 'calc(184px + env(safe-area-inset-bottom))' }}>
+        {comments.slice(-3).map((c, i) => (
+          <div key={c.id} className="ticker-item" style={{ top: i * 32 }}>
+            <span className="who">{paddleNumberOf(c.user_id)}</span>
+            <span>{c.content}</span>
           </div>
         ))}
       </div>
@@ -553,7 +600,10 @@ export function AuctionDetail() {
               return (
                 <button
                   key={m}
-                  onClick={() => setBidAmount(auction.current_price + m * auction.price_step)}
+                  onClick={() => {
+                    setBidAmount(auction.current_price + m * auction.price_step)
+                    trackEvent(auctionId, 'bid_chip_click', { multiplier: m })
+                  }}
                   className={`live-text-btn ${selected ? 'gold' : 'muted'}`}
                 >
                   +¥{(m * auction.price_step).toLocaleString()}
@@ -564,6 +614,7 @@ export function AuctionDetail() {
               onClick={() => {
                 setCustomInput(String(minBid))
                 setShowCustomModal(true)
+                trackEvent(auctionId, 'bid_custom_open')
               }}
               className={`live-text-btn ${
                 matchedMultiplier === 0 || ![1, 2, 5, 10].includes(matchedMultiplier)
@@ -581,7 +632,10 @@ export function AuctionDetail() {
           {/* 评论 + 出价 */}
           <div className="flex items-center gap-3 pt-2">
             <button
-              onClick={() => setShowCommentModal(true)}
+              onClick={() => {
+                setShowCommentModal(true)
+                trackEvent(auctionId, 'comment_open')
+              }}
               className="flex-1 text-left text-white/55 text-sm truncate active:opacity-60 transition-opacity"
             >
               说点什么...
@@ -589,13 +643,14 @@ export function AuctionDetail() {
             <button
               onClick={handleBid}
               disabled={submitting}
-              className="live-text-btn gold text-base"
+              className="btn-paddle"
+              aria-label={isLoggedIn() ? `出价 ${effectiveBidAmount} 元` : '登录后出价'}
             >
               {submitting
-                ? '出价中...'
+                ? '举牌中…'
                 : isLoggedIn()
-                ? `出价 ¥${effectiveBidAmount.toLocaleString()}`
-                : `登录出价`}
+                ? `举牌 ¥${effectiveBidAmount.toLocaleString()}`
+                : `登录举牌`}
             </button>
           </div>
         </div>
@@ -712,24 +767,41 @@ export function AuctionDetail() {
       {/* 结束盖层 */}
       {finished && (
         <FullScreenEnd
-          emoji={finished.winner_id === uid ? '🏆' : '🔨'}
+          Icon={finished.winner_id === uid ? IconTrophy : IconGavel}
+          tone={finished.winner_id === uid ? 'gold' : 'neutral'}
           title="竞拍结束"
           subtitle={auction.title}
         >
-          <div className="text-sm text-white/70 mb-1">成交价</div>
-          <div className="text-5xl font-bold text-[#FFD451] mb-4">¥{finished.final_price}</div>
-          <div className="text-sm text-white/70 mb-6">
-            得主：UID {finished.winner_id ?? '无人出价'}
-            {finished.winner_id === uid && (
-              <span className="text-[#FFD451] ml-1 font-semibold">(你)</span>
+          <div
+            className="text-xs uppercase tracking-[0.18em] text-white/55 mb-1 font-catalog"
+          >
+            Hammer Price
+          </div>
+          <div
+            className="font-catalog tabular-nums text-5xl mb-5"
+            style={{ color: '#FFD66B', fontWeight: 600 }}
+          >
+            ¥{finished.final_price.toLocaleString()}
+          </div>
+          <div className="text-sm text-white/70 mb-6 flex items-center gap-2">
+            <span>得主</span>
+            {finished.winner_id ? (
+              <>
+                <span className="paddle-badge">{paddleNumberOf(finished.winner_id)}</span>
+                {finished.winner_id === uid && (
+                  <span className="text-[#FFD66B] font-semibold">· 是你</span>
+                )}
+              </>
+            ) : (
+              <span className="text-white/55">无人举牌</span>
             )}
           </div>
           {finished.winner_id === uid && (
             <button
               onClick={() => navigate(`/auction/${auctionId}/order`)}
-              className="btn-douyin px-8 py-3 rounded-full font-bold text-base"
+              className="btn-paddle"
             >
-              查看订单
+              领取订单
             </button>
           )}
           <Link to="/" className="mt-6 text-white/70 text-sm">
@@ -740,7 +812,7 @@ export function AuctionDetail() {
 
       {/* 取消盖层 */}
       {cancelled && !finished && (
-        <FullScreenEnd emoji="🚫" title="该竞拍已取消" subtitle={auction.title}>
+        <FullScreenEnd Icon={IconBan} tone="danger" title="该竞拍已取消" subtitle={auction.title}>
           <Link to="/" className="mt-6 text-white/70 text-sm">
             返回大厅
           </Link>
@@ -751,16 +823,20 @@ export function AuctionDetail() {
 }
 
 function FullScreenEnd({
-  emoji,
+  Icon,
+  tone = 'neutral',
   title,
   subtitle,
   children,
 }: {
-  emoji: string
+  Icon: ComponentType<SVGProps<SVGSVGElement> & { size?: number }>
+  tone?: 'gold' | 'neutral' | 'danger'
   title: string
   subtitle?: string
   children?: React.ReactNode
 }) {
+  const iconColor =
+    tone === 'gold' ? '#FFD66B' : tone === 'danger' ? '#FF6B85' : 'rgba(255, 255, 255, 0.7)'
   return (
     <div
       className="absolute inset-0 z-30 flex flex-col items-center justify-center p-8 text-center"
@@ -770,8 +846,12 @@ function FullScreenEnd({
         backdropFilter: 'blur(12px)',
       }}
     >
-      <div className="text-7xl mb-3">{emoji}</div>
-      <div className="text-2xl font-bold text-white mb-1">{title}</div>
+      <div className="mb-4" style={{ color: iconColor }}>
+        <Icon size={64} strokeWidth={1.4} />
+      </div>
+      <div className="font-catalog text-2xl text-white mb-1" style={{ fontWeight: 600 }}>
+        {title}
+      </div>
       {subtitle && <div className="text-sm text-white/60 mb-6">{subtitle}</div>}
       {children}
     </div>

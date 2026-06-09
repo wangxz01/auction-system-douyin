@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
-import type { AdminMetrics, Auction } from '../lib/types'
-import { StatusBadge } from '../components/StatusBadge'
+import type { AdminAlert, AdminMetrics, Auction } from '../lib/types'
+import { paddleNumberOf } from '../lib/paddle'
 
 export function AdminList() {
   const nav = useNavigate()
   const [auctions, setAuctions] = useState<Auction[]>([])
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null)
+  const [alerts, setAlerts] = useState<AdminAlert[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -24,10 +25,17 @@ export function AdminList() {
       .get<{ data: AdminMetrics }>('/admin/metrics')
       .then((r) => setMetrics(r.data.data))
       .catch(() => setMetrics(null))
+    api
+      .get<{ data: AdminAlert[] }>('/admin/alerts')
+      .then((r) => setAlerts(r.data.data || []))
+      .catch(() => setAlerts([]))
   }
 
   useEffect(() => {
     load()
+    // 调度台轮询：每 10 秒刷新 telemetry + alerts
+    const t = setInterval(load, 10_000)
+    return () => clearInterval(t)
   }, [])
 
   const handleStart = async (e: React.MouseEvent, id: number) => {
@@ -54,131 +62,197 @@ export function AdminList() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-8 py-8">
-      <div className="admin-page-header">
+    <div className="max-w-6xl mx-auto px-8 py-7">
+      {/* 调度台标题（等宽 + 全大写） */}
+      <div className="flex items-end justify-between mb-5">
         <div>
-          <h1 className="ios-large-title">竞拍管理</h1>
-          <p className="text-sm text-[#8E8E93] mt-1">查看、开始或取消你发布的竞拍</p>
+          <div className="console-title">Auction Bridge</div>
+          <div className="console-subtitle mt-1">竞拍管理 · Live operations</div>
         </div>
-        <button
-          onClick={() => nav('/admin/create')}
-          className="btn-accent px-5 py-2 rounded-full text-sm"
-        >
-          ＋ 发布新竞拍
+        <button onClick={() => nav('/admin/create')} className="btn-console primary">
+          ＋ New Lot
         </button>
       </div>
 
-      <div className="ios-section-header" style={{ padding: '0 4px 8px' }}>
-        <span>全部竞拍</span>
-        {!loading && <span className="text-[#8E8E93]">{auctions.length} 件</span>}
-      </div>
+      {/* Telemetry 遥测条 —— 始终可见 */}
+      <TelemetryBar metrics={metrics} />
 
-      {metrics && (
-        <div className="grid grid-cols-5 gap-3 mb-5">
-          <Metric label="活跃竞拍" value={metrics.active_auctions} />
-          <Metric label="WS 在线" value={metrics.online_ws_connections} />
-          <Metric label="直播间" value={metrics.active_rooms} />
-          <Metric label="今日出价" value={metrics.total_bids_today} />
-          <Metric label="基础设施" value={`${metrics.db_available ? 'DB 正常' : 'DB 异常'} / ${metrics.redis_available ? 'Redis 正常' : 'Redis 降级'}`} />
+      {/* 告警 banner —— 仅在有告警时显示 */}
+      {alerts.length > 0 && (
+        <div>
+          {alerts.map((a, i) => (
+            <div key={i} className={`alert-banner ${a.severity}`}>
+              <span className="severity">{a.severity}</span>
+              <div className="flex-1">
+                <div>{a.message}</div>
+                <div className="code">{a.code}</div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
-      {loading && (
-        <div className="bg-white rounded-2xl p-12 text-center text-[#8E8E93]">加载中...</div>
-      )}
-      {error && (
-        <div className="bg-white rounded-2xl p-12 text-center text-[#FF3B30]">错误: {error}</div>
-      )}
-      {!loading && !error && (
-        <div className="bg-white rounded-2xl overflow-hidden">
-          <table className="w-full text-[14px]">
+      {/* 竞拍面板 */}
+      <div className="console-panel mt-4">
+        <div className="console-panel-header">
+          <span className="title">Lot Roster</span>
+          <span className="count">{loading ? '…' : `${auctions.length} TOTAL`}</span>
+        </div>
+
+        {loading && (
+          <div className="px-5 py-10 text-center text-sm" style={{ color: 'var(--console-ink-mute)', fontFamily: 'var(--font-console)' }}>
+            Loading…
+          </div>
+        )}
+        {error && (
+          <div className="px-5 py-10 text-center text-sm" style={{ color: 'var(--console-crimson)', fontFamily: 'var(--font-console)' }}>
+            ERROR · {error}
+          </div>
+        )}
+
+        {!loading && !error && (
+          <table className="console-table">
             <thead>
-              <tr className="text-[#8E8E93] text-xs uppercase tracking-wide">
-                <th className="px-5 py-3 text-left font-medium">ID</th>
-                <th className="px-5 py-3 text-left font-medium">商品</th>
-                <th className="px-5 py-3 text-right font-medium">起拍价</th>
-                <th className="px-5 py-3 text-right font-medium">加价幅度</th>
-                <th className="px-5 py-3 text-right font-medium">当前价</th>
-                <th className="px-5 py-3 text-right font-medium">成交结果</th>
-                <th className="px-5 py-3 text-center font-medium">状态</th>
-                <th className="px-5 py-3 text-right font-medium">操作</th>
+              <tr>
+                <th style={{ width: 70 }}>Lot</th>
+                <th>Title</th>
+                <th style={{ textAlign: 'right' }}>Start</th>
+                <th style={{ textAlign: 'right' }}>Step</th>
+                <th style={{ textAlign: 'right' }}>Current</th>
+                <th>Outcome</th>
+                <th style={{ width: 110 }}>Status</th>
+                <th style={{ textAlign: 'right', width: 180 }}>Action</th>
               </tr>
             </thead>
             <tbody>
               {auctions.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-5 py-16 text-center text-[#8E8E93]">
-                    <div className="text-5xl mb-2">📦</div>
-                    暂无竞拍
+                  <td colSpan={8} className="text-center" style={{ padding: '48px 0', color: 'var(--console-ink-mute)', fontFamily: 'var(--font-console)' }}>
+                    NO LOTS YET
                   </td>
                 </tr>
               )}
               {auctions.map((a) => (
-                <tr
-                  key={a.id}
-                  onClick={() => nav(`/admin/auctions/${a.id}`)}
-                  className="relative hover:bg-[#F8F8F8] active:bg-[#EFEFEF] transition-colors cursor-pointer admin-row"
-                >
-                  <td className="px-5 py-3 text-[#8E8E93]">#{a.id}</td>
-                  <td className="px-5 py-3 font-medium">{a.title}</td>
-                  <td className="px-5 py-3 text-right text-[#3C3C43]">¥{a.start_price}</td>
-                  <td className="px-5 py-3 text-right text-[#3C3C43]">¥{a.price_step}</td>
-                  <td className="px-5 py-3 text-right text-[#FF9500] font-semibold">
-                    ¥{a.current_price}
+                <tr key={a.id} onClick={() => nav(`/admin/auctions/${a.id}`)}>
+                  <td className="num" style={{ textAlign: 'left', color: 'var(--console-ink-soft)' }}>
+                    #{String(a.id).padStart(4, '0')}
                   </td>
-                  <td className="px-5 py-3 text-right text-[#3C3C43]">
-                    {a.status === 'finished'
-                      ? `¥${a.current_price} / UID ${a.winner_id ?? '无'}`
-                      : '—'}
+                  <td style={{ color: 'var(--console-ink)' }}>{a.title}</td>
+                  <td className="num">¥{Number(a.start_price).toLocaleString()}</td>
+                  <td className="num">¥{Number(a.price_step).toLocaleString()}</td>
+                  <td className="num hi">¥{Number(a.current_price).toLocaleString()}</td>
+                  <td style={{ color: 'var(--console-ink-soft)', fontFamily: 'var(--font-console)', fontSize: 12 }}>
+                    {a.status === 'finished' ? (
+                      <>¥{Number(a.current_price).toLocaleString()} → {paddleNumberOf(a.winner_id)}</>
+                    ) : (
+                      <span style={{ color: 'var(--console-ink-mute)' }}>—</span>
+                    )}
                   </td>
-                  <td className="px-5 py-3 text-center">
-                    <StatusBadge status={a.status} />
+                  <td>
+                    <ConsoleStatus status={a.status} />
                   </td>
-                  <td className="px-5 py-3 text-right">
+                  <td style={{ textAlign: 'right' }}>
                     {a.status === 'pending' && (
                       <div className="flex justify-end gap-2">
-                        <button
-                          onClick={(e) => handleStart(e, a.id)}
-                          className="btn-accent px-3 py-1.5 rounded-full text-xs"
-                        >
-                          开始
+                        <button onClick={(e) => handleStart(e, a.id)} className="btn-console primary">
+                          Start
                         </button>
-                        <button
-                          onClick={(e) => handleCancel(e, a.id)}
-                          className="btn-default px-3 py-1.5 rounded-full text-xs"
-                        >
-                          取消
+                        <button onClick={(e) => handleCancel(e, a.id)} className="btn-console">
+                          Cancel
                         </button>
                       </div>
                     )}
                     {a.status === 'active' && (
-                      <button
-                        onClick={(e) => handleCancel(e, a.id)}
-                        className="btn-danger px-3 py-1.5 rounded-full text-xs"
-                      >
-                        取消竞拍
+                      <button onClick={(e) => handleCancel(e, a.id)} className="btn-console danger">
+                        Stop
                       </button>
                     )}
                     {(a.status === 'finished' || a.status === 'cancelled') && (
-                      <span className="text-[#C7C7CC]">—</span>
+                      <span style={{ color: 'var(--console-ink-mute)', fontFamily: 'var(--font-console)', fontSize: 11 }}>—</span>
                     )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
 
-function Metric({ label, value }: { label: string; value: React.ReactNode }) {
+function TelemetryBar({ metrics }: { metrics: AdminMetrics | null }) {
+  if (!metrics) {
+    return (
+      <div className="telemetry-bar">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="telemetry-cell">
+            <span className="strip" />
+            <span className="k">—</span>
+            <span className="v" style={{ color: 'var(--console-ink-mute)' }}>·</span>
+          </div>
+        ))}
+      </div>
+    )
+  }
+  const dbOk = metrics.db_available
+  const redisOk = metrics.redis_available
+  const infraTone: 'healthy' | 'warn' | 'crit' = !dbOk ? 'crit' : !redisOk ? 'warn' : 'healthy'
+  const infraLabel = !dbOk ? 'DB DOWN' : !redisOk ? 'REDIS DOWN' : 'NOMINAL'
+  const alertCount = metrics.alert_count ?? 0
+  const alertTone: 'healthy' | 'warn' | 'crit' = alertCount === 0 ? 'healthy' : alertCount > 2 ? 'crit' : 'warn'
+
   return (
-    <div className="bg-white rounded-2xl px-4 py-3">
-      <div className="text-xs text-[#8E8E93] mb-1">{label}</div>
-      <div className="text-lg font-semibold text-[#1d1d1f] truncate">{value}</div>
+    <div className="telemetry-bar">
+      <div className="telemetry-cell">
+        <span className="strip" />
+        <span className="k">Active Lots</span>
+        <span className="v">{metrics.active_auctions}</span>
+      </div>
+      <div className={`telemetry-cell ${metrics.online_ws_connections > 0 ? 'healthy' : ''}`}>
+        <span className="strip" />
+        <span className="k">WS Online</span>
+        <div>
+          <span className={`v ${metrics.online_ws_connections > 0 ? 'healthy' : ''}`}>
+            {metrics.online_ws_connections}
+          </span>
+          <span className="sub">{metrics.active_rooms} rooms</span>
+        </div>
+      </div>
+      <div className="telemetry-cell">
+        <span className="strip" />
+        <span className="k">Bids · Today</span>
+        <div>
+          <span className="v">{metrics.total_bids_today}</span>
+          {typeof metrics.total_events_today === 'number' && (
+            <span className="sub">{metrics.total_events_today} events</span>
+          )}
+        </div>
+      </div>
+      <div className={`telemetry-cell ${infraTone}`}>
+        <span className="strip" />
+        <span className="k">Infrastructure</span>
+        <span className={`v ${infraTone}`} style={{ fontSize: 14, letterSpacing: '0.08em' }}>
+          {infraLabel}
+        </span>
+      </div>
+      <div className={`telemetry-cell ${alertTone}`}>
+        <span className="strip" />
+        <span className="k">Alerts</span>
+        <span className={`v ${alertTone}`}>{alertCount}</span>
+      </div>
     </div>
+  )
+}
+
+function ConsoleStatus({ status }: { status: Auction['status'] }) {
+  const label =
+    status === 'active' ? 'LIVE' : status === 'pending' ? 'READY' : status === 'finished' ? 'SOLD' : 'STOPPED'
+  return (
+    <span className={`console-status ${status === 'active' ? 'live' : status}`}>
+      <span className="dot" />
+      {label}
+    </span>
   )
 }
 

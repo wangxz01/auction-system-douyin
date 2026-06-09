@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import type { AdminOrderEntry } from '../lib/types'
+import { paddleNumberOf } from '../lib/paddle'
 
 export function AdminOrders() {
   const [items, setItems] = useState<AdminOrderEntry[]>([])
@@ -20,60 +21,82 @@ export function AdminOrders() {
   }, [])
 
   return (
-    <div className="max-w-5xl mx-auto px-8 py-8">
-      <div className="admin-page-header">
+    <div className="max-w-6xl mx-auto px-8 py-7">
+      <div className="flex items-end justify-between mb-5">
         <div>
-          <h1 className="ios-large-title">订单管理</h1>
-          <p className="text-sm text-[#8E8E93] mt-1">查看成交订单与竞拍结果</p>
+          <div className="console-title">Settled Orders</div>
+          <div className="console-subtitle mt-1">订单管理 · 成交结果</div>
         </div>
       </div>
 
-      <div className="ios-section-header" style={{ padding: '0 4px 8px' }}>
-        <span>成交订单</span>
-        {!loading && <span className="text-[#8E8E93]">{items.length} 单</span>}
-      </div>
+      <div className="console-panel">
+        <div className="console-panel-header">
+          <span className="title">Order Log</span>
+          <span className="count">{loading ? '…' : `${items.length} ORDERS`}</span>
+        </div>
 
-      {loading && <div className="bg-white rounded-2xl p-12 text-center text-[#8E8E93]">加载中...</div>}
-      {error && <div className="bg-white rounded-2xl p-12 text-center text-[#FF3B30]">错误: {error}</div>}
-      {!loading && !error && (
-        <div className="bg-white rounded-2xl overflow-hidden">
-          <table className="w-full text-[14px]">
+        {loading && (
+          <div className="px-5 py-10 text-center text-sm" style={{ color: 'var(--console-ink-mute)', fontFamily: 'var(--font-console)' }}>
+            Loading…
+          </div>
+        )}
+        {error && (
+          <div className="px-5 py-10 text-center text-sm" style={{ color: 'var(--console-crimson)', fontFamily: 'var(--font-console)' }}>
+            ERROR · {error}
+          </div>
+        )}
+        {!loading && !error && (
+          <table className="console-table">
             <thead>
-              <tr className="text-[#8E8E93] text-xs uppercase tracking-wide">
-                <th className="px-5 py-3 text-left font-medium">订单</th>
-                <th className="px-5 py-3 text-left font-medium">商品</th>
-                <th className="px-5 py-3 text-right font-medium">买家</th>
-                <th className="px-5 py-3 text-right font-medium">成交价</th>
-                <th className="px-5 py-3 text-center font-medium">状态</th>
-                <th className="px-5 py-3 text-right font-medium">时间</th>
+              <tr>
+                <th style={{ width: 80 }}>Order</th>
+                <th>Lot · Title</th>
+                <th style={{ textAlign: 'right' }}>Buyer</th>
+                <th style={{ textAlign: 'right' }}>Hammer</th>
+                <th style={{ width: 100 }}>Status</th>
+                <th style={{ textAlign: 'right', width: 160 }}>Time</th>
               </tr>
             </thead>
             <tbody>
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-5 py-16 text-center text-[#8E8E93]">
-                    暂无订单
+                  <td colSpan={6} className="text-center" style={{ padding: '48px 0', color: 'var(--console-ink-mute)', fontFamily: 'var(--font-console)' }}>
+                    NO ORDERS YET
                   </td>
                 </tr>
               )}
               {items.map(({ order, auction }) => (
-                <tr key={order.id} className="hover:bg-[#F8F8F8] transition-colors">
-                  <td className="px-5 py-3 text-[#8E8E93]">#{order.id}</td>
-                  <td className="px-5 py-3 font-medium">
-                    <Link to={`/admin/auctions/${auction.id}`} className="hover:text-[#FF9500]">
+                <tr key={order.id}>
+                  <td className="num" style={{ textAlign: 'left', color: 'var(--console-ink-soft)' }}>
+                    #{String(order.id).padStart(4, '0')}
+                  </td>
+                  <td>
+                    <Link
+                      to={`/admin/auctions/${auction.id}`}
+                      style={{ color: 'var(--console-ink)' }}
+                      className="hover:underline"
+                    >
+                      <span style={{ color: 'var(--console-cyan)', fontFamily: 'var(--font-console)', fontSize: 11, marginRight: 8 }}>
+                        #{String(auction.id).padStart(4, '0')}
+                      </span>
                       {auction.title}
                     </Link>
                   </td>
-                  <td className="px-5 py-3 text-right text-[#3C3C43]">UID {order.user_id}</td>
-                  <td className="px-5 py-3 text-right text-[#FF9500] font-semibold">¥{order.final_price}</td>
-                  <td className="px-5 py-3 text-center">{order.status}</td>
-                  <td className="px-5 py-3 text-right text-[#8E8E93]">{fmt(order.created_at)}</td>
+                  <td className="num">{paddleNumberOf(order.user_id)}</td>
+                  <td className="num hi">¥{Number(order.final_price).toLocaleString()}</td>
+                  <td>
+                    <span className="console-status pending">
+                      <span className="dot" />
+                      {order.status.toUpperCase()}
+                    </span>
+                  </td>
+                  <td className="num" style={{ color: 'var(--console-ink-mute)' }}>{fmt(order.created_at)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }

@@ -1,26 +1,42 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { clearAuth, getUser } from '../lib/auth'
+import {
+  IconCatalog,
+  IconGavel,
+  IconLogout,
+  IconPlus,
+  IconReceipt,
+  IconUser,
+} from '../lib/icons'
+import type { ComponentType, SVGProps } from 'react'
 
-const ITEMS = [
+type SidebarItem = {
+  to: string
+  Icon: ComponentType<SVGProps<SVGSVGElement> & { size?: number }>
+  label: string
+  match: (p: string) => boolean
+}
+
+const ITEMS: SidebarItem[] = [
   {
     to: '/admin',
-    icon: '📋',
+    Icon: IconCatalog,
     label: '竞拍管理',
-    match: (p: string) => p === '/admin' || p.startsWith('/admin/auctions'),
+    match: (p) => p === '/admin' || p.startsWith('/admin/auctions'),
   },
   {
     to: '/admin/create',
-    icon: '➕',
+    Icon: IconPlus,
     label: '发布商品',
-    match: (p: string) => p === '/admin/create',
+    match: (p) => p === '/admin/create',
   },
   {
     to: '/admin/orders',
-    icon: '🧾',
+    Icon: IconReceipt,
     label: '订单管理',
-    match: (p: string) => p === '/admin/orders',
+    match: (p) => p === '/admin/orders',
   },
-] as const
+]
 
 export function AdminSidebar() {
   const { pathname } = useLocation()
@@ -29,36 +45,37 @@ export function AdminSidebar() {
 
   return (
     <aside className="admin-sidebar">
-      {/* 顶部品牌 */}
       <div className="admin-sidebar-brand" title="拍卖系统">
-        🏷️
+        <IconGavel size={22} />
       </div>
 
-      {/* 导航 紧贴 brand 下方 */}
       <nav className="flex flex-col gap-2 mt-2">
-        {ITEMS.map((it) => {
-          const active = it.match(pathname)
+        {ITEMS.map(({ to, Icon, label, match }) => {
+          const active = match(pathname)
           return (
             <Link
-              key={it.to}
-              to={it.to}
+              key={to}
+              to={to}
               className={`admin-sidebar-item ${active ? 'is-active' : ''}`}
+              aria-current={active ? 'page' : undefined}
             >
-              <span className="icon">{it.icon}</span>
-              <span>{it.label}</span>
+              <span className="icon">
+                <Icon size={22} />
+              </span>
+              <span>{label}</span>
             </Link>
           )
         })}
       </nav>
 
-      {/* 撑开，把账号推到底部 */}
       <div className="admin-sidebar-spacer" />
 
-      {/* 账号 + 退出 */}
       {me && (
         <div className="flex flex-col items-center gap-2">
           <div className="admin-sidebar-item" title={me.username}>
-            <span className="icon">👤</span>
+            <span className="icon">
+              <IconUser size={22} />
+            </span>
             <span className="truncate max-w-[64px]">{me.username}</span>
           </div>
           <button
@@ -67,8 +84,11 @@ export function AdminSidebar() {
               nav('/login')
             }}
             className="admin-sidebar-item"
+            aria-label="退出登录"
           >
-            <span className="icon">↩</span>
+            <span className="icon">
+              <IconLogout size={22} />
+            </span>
             <span>退出</span>
           </button>
         </div>
