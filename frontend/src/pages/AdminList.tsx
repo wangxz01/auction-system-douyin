@@ -100,8 +100,25 @@ export function AdminList() {
         </div>
 
         {loading && (
-          <div className="px-5 py-10 text-center text-sm" style={{ color: 'var(--console-ink-mute)', fontFamily: 'var(--font-console)' }}>
-            Loading…
+          <div style={{ padding: 14 }}>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-4"
+                style={{
+                  paddingTop: 10,
+                  paddingBottom: 10,
+                  borderBottom: i < 4 ? '1px solid var(--console-rule)' : 'none',
+                }}
+              >
+                <div className="skeleton" style={{ height: 12, width: 60 }} />
+                <div className="skeleton" style={{ height: 14, flex: 1 }} />
+                <div className="skeleton" style={{ height: 14, width: 70 }} />
+                <div className="skeleton" style={{ height: 14, width: 70 }} />
+                <div className="skeleton" style={{ height: 14, width: 90 }} />
+                <div className="skeleton" style={{ height: 18, width: 100 }} />
+              </div>
+            ))}
           </div>
         )}
         {error && (

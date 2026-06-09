@@ -318,6 +318,29 @@ export function AuctionDetail() {
       amount: effectiveBidAmount,
       multiplier: matchedMultiplier || null,
     })
+
+    // 乐观更新：立刻把本地当前价 / 排行榜推进，减少 200ms 感知延迟
+    // WS new_bid 到达后会用服务端权威数据覆盖；失败时下面 catch 会回滚
+    const snapshot = {
+      current_price: auction.current_price,
+      winner_id: auction.winner_id,
+      topBids,
+      priceFlashKey,
+    }
+    setAuction((p) =>
+      p ? { ...p, current_price: effectiveBidAmount, winner_id: uid } : p,
+    )
+    setTopBids((prev) => {
+      const optimistic: TopBid = {
+        user_id: uid,
+        amount: effectiveBidAmount,
+        amount_cents: Math.round(effectiveBidAmount * 100),
+      }
+      const merged = [optimistic, ...prev.filter((b) => b.user_id !== uid)]
+      return merged.slice(0, 5)
+    })
+    setPriceFlashKey((k) => k + 1)
+
     try {
       await api.post(`/auctions/${auctionId}/bids`, {
         amount: effectiveBidAmount,
@@ -325,6 +348,14 @@ export function AuctionDetail() {
       })
       hasBidRef.current = true
     } catch (e: unknown) {
+      // 回滚乐观更新
+      setAuction((p) =>
+        p
+          ? { ...p, current_price: snapshot.current_price, winner_id: snapshot.winner_id }
+          : p,
+      )
+      setTopBids(snapshot.topBids)
+      setPriceFlashKey(snapshot.priceFlashKey)
       const r = (e as { response?: { data?: { error?: string } } }).response
       alert(r?.data?.error ?? '出价失败')
     } finally {

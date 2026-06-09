@@ -71,6 +71,10 @@ export function MyBids() {
                   <img
                     src={a.image_url}
                     alt={a.title}
+                    loading="lazy"
+                    decoding="async"
+                    width={80}
+                    height={80}
                     className="w-20 h-20 object-cover bg-[#F2F2F7]"
                     onError={(e) => {
                       ;(e.currentTarget as HTMLImageElement).style.display = 'none'

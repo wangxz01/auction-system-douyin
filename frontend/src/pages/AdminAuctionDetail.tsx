@@ -194,6 +194,10 @@ export function AdminAuctionDetail() {
           <img
             src={auction.image_url}
             alt={auction.title}
+            loading="lazy"
+            decoding="async"
+            width={1280}
+            height={500}
             className="w-full h-56 object-cover bg-[#F2F2F7]"
             onError={(e) => {
               ;(e.currentTarget as HTMLImageElement).style.display = 'none'

@@ -77,19 +77,22 @@ export function UserHall() {
 
       {/* 拍品卡列表 */}
       <div className="px-4 space-y-4">
-        {loading && (
-          <div
-            className="rounded text-center py-12 text-sm"
-            style={{
-              background: 'var(--hall-ivory-soft)',
-              border: '1px solid var(--hall-ivory-rim)',
-              color: 'var(--hall-ink-mute)',
-              fontFamily: 'var(--font-catalog)',
-            }}
-          >
-            Loading…
-          </div>
-        )}
+        {loading &&
+          Array.from({ length: 3 }).map((_, i) => (
+            <div
+              key={i}
+              className="lot-card"
+              style={{ pointerEvents: 'none', animationDelay: `${i * 40}ms` }}
+            >
+              <div className="lot-card-media skeleton" />
+              <div className="lot-card-body">
+                <div className="skeleton" style={{ height: 18, width: '60%' }} />
+                <div className="lot-card-rule" />
+                <div className="skeleton" style={{ height: 14, width: '40%', marginBottom: 8 }} />
+                <div className="skeleton" style={{ height: 12, width: '30%' }} />
+              </div>
+            </div>
+          ))}
         {!loading && list.length === 0 && (
           <div
             className="rounded text-center py-12 text-sm font-catalog"
@@ -114,6 +117,10 @@ export function UserHall() {
                 <img
                   src={a.image_url}
                   alt={a.title}
+                  loading="lazy"
+                  decoding="async"
+                  width={800}
+                  height={600}
                   onError={(e) => {
                     ;(e.currentTarget as HTMLImageElement).style.display = 'none'
                   }}
