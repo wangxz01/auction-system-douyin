@@ -27,8 +27,10 @@ type authResp struct {
 }
 
 const (
-	loginFailureWindow = time.Minute
-	loginFailureLimit  = 5
+	loginFailureWindow   = time.Minute
+	loginFailureLimit    = 5
+	registerWindow       = 10 * time.Minute
+	registerPerIPLimit   = 10
 )
 
 type loginFailureBucket struct {
@@ -41,13 +43,27 @@ var loginFailures = struct {
 	items map[string]loginFailureBucket
 }{items: make(map[string]loginFailureBucket)}
 
+// 注册节流（按 IP），用同样的 bucket 形态；与 login 失败计数器解耦。
+var registerAttempts = struct {
+	sync.Mutex
+	items map[string]loginFailureBucket
+}{items: make(map[string]loginFailureBucket)}
+
 func Register(c *gin.Context) {
+	// 注册节流：同一 IP 在 10 分钟内最多 10 次尝试（防被脚本刷注册）。
+	ipKey := c.ClientIP()
+	if isRegisterRateLimited(ipKey, time.Now()) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "注册尝试过多，请稍后再试"})
+		return
+	}
 	var req authReq
 	if err := c.ShouldBindJSON(&req); err != nil {
+		recordRegisterAttempt(ipKey, time.Now())
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
 		return
 	}
 	req.Username = strings.TrimSpace(req.Username)
+	recordRegisterAttempt(ipKey, time.Now())
 	if len(req.Username) < 2 || len(req.Username) > 32 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "用户名长度需在 2~32 字符之间"})
 		return
@@ -153,6 +169,32 @@ func clearLoginFailures(key string) {
 	loginFailures.Lock()
 	defer loginFailures.Unlock()
 	delete(loginFailures.items, key)
+}
+
+func isRegisterRateLimited(key string, now time.Time) bool {
+	registerAttempts.Lock()
+	defer registerAttempts.Unlock()
+	b, ok := registerAttempts.items[key]
+	if !ok {
+		return false
+	}
+	if now.Sub(b.FirstSeen) > registerWindow {
+		delete(registerAttempts.items, key)
+		return false
+	}
+	return b.Count >= registerPerIPLimit
+}
+
+func recordRegisterAttempt(key string, now time.Time) {
+	registerAttempts.Lock()
+	defer registerAttempts.Unlock()
+	b, ok := registerAttempts.items[key]
+	if !ok || now.Sub(b.FirstSeen) > registerWindow {
+		registerAttempts.items[key] = loginFailureBucket{Count: 1, FirstSeen: now}
+		return
+	}
+	b.Count++
+	registerAttempts.items[key] = b
 }
 
 // Me 返回当前登录用户信息（需 RequireAuth 中间件）。

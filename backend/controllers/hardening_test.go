@@ -387,6 +387,37 @@ func TestLoginIsRateLimitedAfterRepeatedFailures(t *testing.T) {
 	}
 }
 
+func TestRegisterIsRateLimitedPerIP(t *testing.T) {
+	r := setupCommentTest(t)
+	// 清干净本次测试用户名前缀的脏数据
+	config.DB.Where("username LIKE ?", "reg-throttle-%").Delete(&models.User{})
+	t.Cleanup(func() {
+		config.DB.Where("username LIKE ?", "reg-throttle-%").Delete(&models.User{})
+	})
+
+	// 10 次有效注册（每次用不同用户名）应该全部成功
+	for i := 0; i < 10; i++ {
+		body := `{"username":"reg-throttle-` + strconv.Itoa(i) + `","password":"password123"}`
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("attempt %d status = %d, body = %s", i+1, rec.Code, rec.Body.String())
+		}
+	}
+
+	// 第 11 次同 IP 注册：超过 10/10min 上限 → 429
+	body := `{"username":"reg-throttle-overflow","password":"password123"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 after rate limit; got %d, body = %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestBidAboveSystemMaximumIsRejected(t *testing.T) {
 	r := setupCommentTest(t)
 	oldMax := config.Get().MaxBidAmountCents

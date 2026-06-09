@@ -315,14 +315,26 @@ func GetBids(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "id 不合法"})
 		return
 	}
+	limit, offset := parsePagination(c, 10, 200)
+
+	var total int64
+	if err := config.DB.Model(&models.Bid{}).Where("auction_id = ?", id).Count(&total).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	var bids []models.Bid
 	if err := config.DB.
 		Where("auction_id = ?", id).
 		Order("amount DESC").
-		Limit(10).
+		Limit(limit).
+		Offset(offset).
 		Find(&bids).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": bids})
+	c.JSON(http.StatusOK, gin.H{
+		"data": bids,
+		"meta": pageMeta{Total: total, Limit: limit, Offset: offset},
+	})
 }
