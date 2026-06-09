@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import Hls from 'hls.js'
+import type Hls from 'hls.js'
 import { api } from '../api/client'
 import { getUser, isLoggedIn } from '../lib/auth'
 import { AuctionWS } from '../lib/ws'
@@ -96,23 +96,28 @@ export function AuctionDetail() {
       const onErr = () => playFallback()
       video.addEventListener('error', onErr, { once: true })
       void video.play().catch(() => {})
-    } else if (Hls.isSupported()) {
-      hls = new Hls({ enableWorker: true })
-      hls.loadSource(url)
-      hls.attachMedia(video)
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        if (stopped) return
-        void video.play().catch(() => {})
-      })
-      hls.on(Hls.Events.ERROR, (_, data) => {
-        if (data.fatal) {
-          hls?.destroy()
-          hls = null
-          playFallback()
-        }
-      })
     } else {
-      playFallback()
+      void import('hls.js').then(({ default: Hls }) => {
+        if (stopped) return
+        if (!Hls.isSupported()) {
+          playFallback()
+          return
+        }
+        hls = new Hls({ enableWorker: true })
+        hls.loadSource(url)
+        hls.attachMedia(video)
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          if (stopped) return
+          void video.play().catch(() => {})
+        })
+        hls.on(Hls.Events.ERROR, (_, data) => {
+          if (data.fatal) {
+            hls?.destroy()
+            hls = null
+            playFallback()
+          }
+        })
+      })
     }
 
     return () => {
