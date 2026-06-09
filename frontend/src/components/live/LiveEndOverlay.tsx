@@ -62,8 +62,8 @@ export function LiveFinishedOverlay({
       title="竞拍结束"
       subtitle={title}
     >
-      <div className="text-xs uppercase tracking-[0.18em] text-white/55 mb-1 font-catalog">
-        Hammer Price
+      <div className="text-xs tracking-[0.18em] text-white/55 mb-1 font-catalog">
+        成交价
       </div>
       <div
         className="font-catalog tabular-nums text-5xl mb-5"

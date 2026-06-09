@@ -20,7 +20,7 @@ export function AdminList() {
         setAuctions(r.data.data)
         setError(null)
       })
-      .catch((e) => setError(e.message))
+      .catch((e) => setError(extractError(e)))
       .finally(() => setLoading(false))
     api
       .get<{ data: AdminMetrics }>('/admin/metrics')
@@ -105,11 +105,11 @@ export function AdminList() {
       {/* 调度台标题（等宽 + 全大写） */}
       <div className="flex items-end justify-between mb-5">
         <div>
-          <div className="console-title">Auction Bridge</div>
-          <div className="console-subtitle mt-1">竞拍管理 · Live operations</div>
+          <div className="console-title">竞拍管理台</div>
+          <div className="console-subtitle mt-1">竞拍管理 · 实时运营</div>
         </div>
         <button onClick={() => nav('/admin/create')} className="btn-console primary">
-          ＋ New Lot
+          ＋ 新建竞拍
         </button>
       </div>
 
@@ -121,10 +121,10 @@ export function AdminList() {
         <div>
           {alerts.map((a, i) => (
             <div key={i} className={`alert-banner ${a.severity}`}>
-              <span className="severity">{a.severity}</span>
+              <span className="severity">{alertSeverityLabel(a.severity)}</span>
               <div className="flex-1">
                 <div>{a.message}</div>
-                <div className="code">{a.code}</div>
+                <div className="code">{alertSeverityLabel(a.severity)}</div>
               </div>
             </div>
           ))}
@@ -134,8 +134,8 @@ export function AdminList() {
       {/* 竞拍面板 */}
       <div className="console-panel mt-4">
         <div className="console-panel-header">
-          <span className="title">Lot Roster</span>
-          <span className="count">{loading ? '…' : `${auctions.length} TOTAL`}</span>
+          <span className="title">竞拍列表</span>
+          <span className="count">{loading ? '…' : `共 ${auctions.length} 场`}</span>
         </div>
 
         {loading && (
@@ -162,7 +162,7 @@ export function AdminList() {
         )}
         {error && (
           <div className="px-5 py-10 text-center text-sm" style={{ color: 'var(--console-crimson)', fontFamily: 'var(--font-console)' }}>
-            ERROR · {error}
+            错误 · {error}
           </div>
         )}
 
@@ -170,21 +170,21 @@ export function AdminList() {
           <table className="console-table">
             <thead>
               <tr>
-                <th style={{ width: 70 }}>Lot</th>
-                <th>Title</th>
-                <th style={{ textAlign: 'right' }}>Start</th>
-                <th style={{ textAlign: 'right' }}>Step</th>
-                <th style={{ textAlign: 'right' }}>Current</th>
-                <th>Outcome</th>
-                <th style={{ width: 110 }}>Status</th>
-                <th style={{ textAlign: 'right', width: 180 }}>Action</th>
+                <th style={{ width: 70 }}>编号</th>
+                <th>商品</th>
+                <th style={{ textAlign: 'right' }}>起拍价</th>
+                <th style={{ textAlign: 'right' }}>加价</th>
+                <th style={{ textAlign: 'right' }}>当前价</th>
+                <th>成交结果</th>
+                <th style={{ width: 110 }}>状态</th>
+                <th style={{ textAlign: 'right', width: 180 }}>操作</th>
               </tr>
             </thead>
             <tbody>
               {auctions.length === 0 && (
                 <tr>
                   <td colSpan={8} className="text-center" style={{ padding: '48px 0', color: 'var(--console-ink-mute)', fontFamily: 'var(--font-console)' }}>
-                    NO LOTS YET
+                    暂无竞拍
                   </td>
                 </tr>
               )}
@@ -211,26 +211,26 @@ export function AdminList() {
                     {a.status === 'pending' && (
                       <div className="flex justify-end gap-2">
                         <button onClick={(e) => handleStart(e, a.id)} className="btn-console primary">
-                          Start
+                          开始
                         </button>
                         <button onClick={(e) => handleCancel(e, a.id)} className="btn-console">
-                          Cancel
+                          取消
                         </button>
                       </div>
                     )}
                     {a.status === 'active' && (
                       <div className="flex justify-end gap-2">
                         <button onClick={(e) => handleFinish(e, a.id)} className="btn-console primary">
-                          Finish
+                          结束
                         </button>
                         <button onClick={(e) => handleCancel(e, a.id)} className="btn-console danger">
-                          Stop
+                          停止
                         </button>
                       </div>
                     )}
                     {(a.status === 'finished' || a.status === 'cancelled') && (
                       <button onClick={(e) => handleDeleteAuction(e, a.id)} className="btn-console danger">
-                        Delete
+                        删除
                       </button>
                     )}
                   </td>
@@ -243,27 +243,27 @@ export function AdminList() {
 
       <div className="console-panel mt-4">
         <div className="console-panel-header">
-          <span className="title">Demo Users</span>
-          <span className="count">{demoUsers.length} TOTAL</span>
+          <span className="title">演示用户</span>
+          <span className="count">共 {demoUsers.length} 人</span>
         </div>
         <table className="console-table">
           <thead>
             <tr>
-              <th style={{ width: 70 }}>User</th>
-              <th>Username</th>
-              <th>Role</th>
-              <th>Merchant</th>
-              <th style={{ textAlign: 'right' }}>Bids</th>
-              <th style={{ textAlign: 'right' }}>Orders</th>
-              <th style={{ textAlign: 'right' }}>Lots</th>
-              <th style={{ textAlign: 'right', width: 110 }}>Action</th>
+              <th style={{ width: 70 }}>编号</th>
+              <th>用户名</th>
+              <th>角色</th>
+              <th>商家名</th>
+              <th style={{ textAlign: 'right' }}>出价</th>
+              <th style={{ textAlign: 'right' }}>订单</th>
+              <th style={{ textAlign: 'right' }}>竞拍</th>
+              <th style={{ textAlign: 'right', width: 110 }}>操作</th>
             </tr>
           </thead>
           <tbody>
             {demoUsers.length === 0 && (
               <tr>
                 <td colSpan={8} className="text-center" style={{ padding: '34px 0', color: 'var(--console-ink-mute)', fontFamily: 'var(--font-console)' }}>
-                  NO DEMO USERS
+                  暂无演示用户
                 </td>
               </tr>
             )}
@@ -274,7 +274,7 @@ export function AdminList() {
                 </td>
                 <td style={{ color: 'var(--console-ink)' }}>{u.username}</td>
                 <td style={{ color: 'var(--console-ink-soft)', fontFamily: 'var(--font-console)', fontSize: 12 }}>
-                  {u.role.toUpperCase()}
+                  {demoUserRoleLabel(u.role)}
                 </td>
                 <td style={{ color: 'var(--console-ink-soft)' }}>{u.merchant || '—'}</td>
                 <td className="num">{u.bid_count}</td>
@@ -282,7 +282,7 @@ export function AdminList() {
                 <td className="num">{u.auction_count}</td>
                 <td style={{ textAlign: 'right' }}>
                   <button onClick={() => handleDeleteDemoUser(u.id, u.username)} className="btn-console danger">
-                    Delete
+                    删除
                   </button>
                 </td>
               </tr>
@@ -311,7 +311,7 @@ function TelemetryBar({ metrics }: { metrics: AdminMetrics | null }) {
   const dbOk = metrics.db_available
   const redisOk = metrics.redis_available
   const infraTone: 'healthy' | 'warn' | 'crit' = !dbOk ? 'crit' : !redisOk ? 'warn' : 'healthy'
-  const infraLabel = !dbOk ? 'DB DOWN' : !redisOk ? 'REDIS DOWN' : 'NOMINAL'
+  const infraLabel = !dbOk ? '数据库异常' : !redisOk ? 'Redis 异常' : '正常'
   const alertCount = metrics.alert_count ?? 0
   const alertTone: 'healthy' | 'warn' | 'crit' = alertCount === 0 ? 'healthy' : alertCount > 2 ? 'crit' : 'warn'
 
@@ -319,39 +319,39 @@ function TelemetryBar({ metrics }: { metrics: AdminMetrics | null }) {
     <div className="telemetry-bar">
       <div className="telemetry-cell">
         <span className="strip" />
-        <span className="k">Active Lots</span>
+        <span className="k">活跃竞拍</span>
         <span className="v">{metrics.active_auctions}</span>
       </div>
       <div className={`telemetry-cell ${metrics.online_ws_connections > 0 ? 'healthy' : ''}`}>
         <span className="strip" />
-        <span className="k">WS Online</span>
+        <span className="k">在线连接</span>
         <div>
           <span className={`v ${metrics.online_ws_connections > 0 ? 'healthy' : ''}`}>
             {metrics.online_ws_connections}
           </span>
-          <span className="sub">{metrics.active_rooms} rooms</span>
+          <span className="sub">{metrics.active_rooms} 个房间</span>
         </div>
       </div>
       <div className="telemetry-cell">
         <span className="strip" />
-        <span className="k">Bids · Today</span>
+        <span className="k">今日出价</span>
         <div>
           <span className="v">{metrics.total_bids_today}</span>
           {typeof metrics.total_events_today === 'number' && (
-            <span className="sub">{metrics.total_events_today} events</span>
+            <span className="sub">{metrics.total_events_today} 条行为</span>
           )}
         </div>
       </div>
       <div className={`telemetry-cell ${infraTone}`}>
         <span className="strip" />
-        <span className="k">Infrastructure</span>
+        <span className="k">基础设施</span>
         <span className={`v ${infraTone}`} style={{ fontSize: 14, letterSpacing: '0.08em' }}>
           {infraLabel}
         </span>
       </div>
       <div className={`telemetry-cell ${alertTone}`}>
         <span className="strip" />
-        <span className="k">Alerts</span>
+        <span className="k">告警</span>
         <span className={`v ${alertTone}`}>{alertCount}</span>
       </div>
     </div>
@@ -360,13 +360,23 @@ function TelemetryBar({ metrics }: { metrics: AdminMetrics | null }) {
 
 function ConsoleStatus({ status }: { status: Auction['status'] }) {
   const label =
-    status === 'active' ? 'LIVE' : status === 'pending' ? 'READY' : status === 'finished' ? 'SOLD' : 'STOPPED'
+    status === 'active' ? '进行中' : status === 'pending' ? '待开始' : status === 'finished' ? '已成交' : '已停止'
   return (
     <span className={`console-status ${status === 'active' ? 'live' : status}`}>
       <span className="dot" />
       {label}
     </span>
   )
+}
+
+function demoUserRoleLabel(role: DemoUser['role']): string {
+  return role === 'merchant' ? '商家' : '买家'
+}
+
+function alertSeverityLabel(severity: AdminAlert['severity']): string {
+  if (severity === 'critical') return '严重告警'
+  if (severity === 'warning') return '风险提示'
+  return '提示'
 }
 
 function extractError(e: unknown): string {

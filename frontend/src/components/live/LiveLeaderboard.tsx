@@ -9,9 +9,9 @@ export function LiveLeaderboard({ bids, uid }: { bids: TopBid[]; uid: number }) 
       className="absolute right-3 z-10 w-36 live-glass p-2.5"
       style={{ top: 'calc(var(--safe-top) + 108px)' }}
     >
-      <div className="text-[11px] text-white/75 mb-1.5 px-1 flex items-center gap-1.5 font-catalog tracking-wider uppercase">
+      <div className="text-[11px] text-white/75 mb-1.5 px-1 flex items-center gap-1.5 font-catalog">
         <IconTrophy size={12} />
-        <span>Leaderboard</span>
+        <span>实时排行榜</span>
       </div>
       <div className="space-y-1.5">
         {bids.slice(0, 5).map((b, i) => (

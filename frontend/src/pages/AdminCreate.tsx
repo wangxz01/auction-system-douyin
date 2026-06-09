@@ -92,7 +92,7 @@ export function AdminCreate() {
             placeholder="选填"
           />
           <RowInput
-            label="图片 URL"
+            label="图片地址"
             value={form.image_url}
             onChange={(v) => update('image_url', v)}
             placeholder="https://..."
@@ -124,7 +124,7 @@ export function AdminCreate() {
           />
         </div>
         <div className="text-[11px] text-[#8E8E93] mt-1.5 px-1">
-          填写 HLS 播放地址（.m3u8），留空则使用默认演示视频
+          填写直播播放地址（.m3u8），留空则使用默认演示视频
         </div>
 
         {/* 价格规则 */}

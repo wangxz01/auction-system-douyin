@@ -117,11 +117,26 @@ func ListDemoUsers(c *gin.Context) {
 		return
 	}
 
+	userIDs := make([]uint, 0, len(users))
+	for _, u := range users {
+		userIDs = append(userIDs, u.ID)
+	}
+	merchantsByUserID := map[uint]models.Merchant{}
+	if len(userIDs) > 0 {
+		var merchants []models.Merchant
+		if err := config.DB.Where("user_id IN ?", userIDs).Find(&merchants).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		for _, merchant := range merchants {
+			merchantsByUserID[merchant.UserID] = merchant
+		}
+	}
+
 	out := make([]DemoUser, 0, len(users))
 	for _, u := range users {
 		entry := DemoUser{ID: u.ID, Username: u.Username, Role: "buyer"}
-		var merchant models.Merchant
-		if err := config.DB.Where("user_id = ?", u.ID).First(&merchant).Error; err == nil {
+		if merchant, ok := merchantsByUserID[u.ID]; ok {
 			entry.Role = "merchant"
 			entry.Merchant = merchant.DisplayName
 		}

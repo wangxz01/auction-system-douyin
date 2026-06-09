@@ -16,7 +16,7 @@ export function AdminOrders() {
         setItems(r.data.data)
         setError(null)
       })
-      .catch((e) => setError(e.message))
+      .catch((e) => setError(extractError(e)))
       .finally(() => setLoading(false))
   }, [])
 
@@ -24,44 +24,44 @@ export function AdminOrders() {
     <div className="max-w-6xl mx-auto px-8 py-7">
       <div className="flex items-end justify-between mb-5">
         <div>
-          <div className="console-title">Settled Orders</div>
+          <div className="console-title">成交订单</div>
           <div className="console-subtitle mt-1">订单管理 · 成交结果</div>
         </div>
       </div>
 
       <div className="console-panel">
         <div className="console-panel-header">
-          <span className="title">Order Log</span>
-          <span className="count">{loading ? '…' : `${items.length} ORDERS`}</span>
+          <span className="title">订单列表</span>
+          <span className="count">{loading ? '…' : `共 ${items.length} 笔`}</span>
         </div>
 
         {loading && (
           <div className="px-5 py-10 text-center text-sm" style={{ color: 'var(--console-ink-mute)', fontFamily: 'var(--font-console)' }}>
-            Loading…
+            加载中…
           </div>
         )}
         {error && (
           <div className="px-5 py-10 text-center text-sm" style={{ color: 'var(--console-crimson)', fontFamily: 'var(--font-console)' }}>
-            ERROR · {error}
+            错误 · {error}
           </div>
         )}
         {!loading && !error && (
           <table className="console-table">
             <thead>
               <tr>
-                <th style={{ width: 80 }}>Order</th>
-                <th>Lot · Title</th>
-                <th style={{ textAlign: 'right' }}>Buyer</th>
-                <th style={{ textAlign: 'right' }}>Hammer</th>
-                <th style={{ width: 100 }}>Status</th>
-                <th style={{ textAlign: 'right', width: 160 }}>Time</th>
+                <th style={{ width: 80 }}>订单</th>
+                <th>竞拍 · 商品</th>
+                <th style={{ textAlign: 'right' }}>买家</th>
+                <th style={{ textAlign: 'right' }}>成交价</th>
+                <th style={{ width: 100 }}>状态</th>
+                <th style={{ textAlign: 'right', width: 160 }}>时间</th>
               </tr>
             </thead>
             <tbody>
               {items.length === 0 && (
                 <tr>
                   <td colSpan={6} className="text-center" style={{ padding: '48px 0', color: 'var(--console-ink-mute)', fontFamily: 'var(--font-console)' }}>
-                    NO ORDERS YET
+                    暂无订单
                   </td>
                 </tr>
               )}
@@ -87,7 +87,7 @@ export function AdminOrders() {
                   <td>
                     <span className="console-status pending">
                       <span className="dot" />
-                      {order.status.toUpperCase()}
+                      {orderStatusLabel(order.status)}
                     </span>
                   </td>
                   <td className="num" style={{ color: 'var(--console-ink-mute)' }}>{fmt(order.created_at)}</td>
@@ -99,6 +99,21 @@ export function AdminOrders() {
       </div>
     </div>
   )
+}
+
+function orderStatusLabel(status: string): string {
+  if (status === 'pending') return '待支付'
+  if (status === 'paid') return '已支付'
+  if (status === 'cancelled') return '已取消'
+  return status
+}
+
+function extractError(e: unknown): string {
+  if (typeof e === 'object' && e !== null && 'response' in e) {
+    const r = (e as { response?: { data?: { error?: string } } }).response
+    return r?.data?.error ?? '请求失败'
+  }
+  return '请求失败'
 }
 
 function fmt(s: string): string {

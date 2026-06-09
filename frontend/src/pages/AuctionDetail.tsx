@@ -19,6 +19,7 @@ import { LiveCancelledOverlay, LiveFinishedOverlay } from '../components/live/Li
 import { makeClientBidID, playCue } from '../components/live/live-utils'
 
 const FALLBACK_VIDEO = '/live.mp4'
+const QUICK_BID_MULTIPLIERS = [1, 5, 10]
 
 type FinishedInfo = { final_price: number; winner_id: number | null } | null
 
@@ -481,6 +482,7 @@ export function AuctionDetail() {
         viewers={viewers}
         participantCount={participantCount}
         uid={uid}
+        onBack={() => navigate('/')}
       />
 
       {auction.status === 'active' && <LiveCountdown msLeft={msLeft} />}
@@ -500,8 +502,8 @@ export function AuctionDetail() {
           className="absolute left-2 right-2 bottom-2 z-10 live-glass px-3 pt-2"
           style={{ paddingBottom: 'calc(8px + env(safe-area-inset-bottom))' }}
         >
-          <div className="flex items-center gap-5 text-sm whitespace-nowrap overflow-x-auto pb-2">
-            {[1, 2, 5, 10].map((m) => {
+          <div className="bid-quick-grid pb-2">
+            {QUICK_BID_MULTIPLIERS.map((m) => {
               const selected = matchedMultiplier === m
               return (
                 <button
@@ -523,7 +525,7 @@ export function AuctionDetail() {
                 trackEvent(auctionId, 'bid_custom_open')
               }}
               className={`live-text-btn ${
-                matchedMultiplier === 0 || ![1, 2, 5, 10].includes(matchedMultiplier)
+                matchedMultiplier === 0 || !QUICK_BID_MULTIPLIERS.includes(matchedMultiplier)
                   ? 'gold'
                   : 'white'
               }`}

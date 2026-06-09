@@ -196,7 +196,7 @@ export function AdminAuctionDetail() {
           <div className="ios-section-header" style={{ padding: '0 4px 8px' }}>编辑未开始竞拍</div>
           <div className="ios-list ios-list-flush">
             <EditInput label="名称" value={editForm.title} onChange={(v) => updateEdit('title', v)} />
-            <EditInput label="图片 URL" value={editForm.image_url} onChange={(v) => updateEdit('image_url', v)} />
+            <EditInput label="图片地址" value={editForm.image_url} onChange={(v) => updateEdit('image_url', v)} />
             <EditInput label="推流地址" value={editForm.stream_url} onChange={(v) => updateEdit('stream_url', v)} />
             <EditInput label="起拍价" type="number" value={String(editForm.start_price)} onChange={(v) => updateEdit('start_price', v)} suffix="¥" />
             <EditInput label="加价幅度" type="number" value={String(editForm.price_step)} onChange={(v) => updateEdit('price_step', v)} suffix="¥" />
@@ -234,7 +234,7 @@ export function AdminAuctionDetail() {
         )}
         <div className="ios-list ios-list-flush">
           <Row label="名称" value={auction.title} />
-          <Row label="图片 URL" value={auction.image_url || '—'} mono />
+          <Row label="图片地址" value={auction.image_url || '—'} mono />
           <Row
             label="推流地址"
             value={auction.stream_url || '— (使用默认演示视频)'}

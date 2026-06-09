@@ -1,16 +1,34 @@
 package controllers_test
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"auction-system/backend/config"
 	"auction-system/backend/models"
+
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
+
+type recordNotFoundCaptureLogger struct {
+	logger.Interface
+	count int64
+}
+
+func (l *recordNotFoundCaptureLogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		atomic.AddInt64(&l.count, 1)
+	}
+	l.Interface.Trace(ctx, begin, fc, err)
+}
 
 func TestAdminForceFinishAuctionCreatesOrder(t *testing.T) {
 	t.Setenv("ADMIN_USERNAMES", "demo-finish-admin")
@@ -162,5 +180,49 @@ func TestAdminListsAndDeletesDemoUserOnly(t *testing.T) {
 	config.DB.Model(&models.Bid{}).Where("user_id = ?", demo.ID).Count(&bids)
 	if bids != 0 {
 		t.Fatalf("demo user bid count = %d; want 0", bids)
+	}
+}
+
+func TestAdminListDemoUsersDoesNotLogMissingMerchantAsRecordNotFound(t *testing.T) {
+	t.Setenv("ADMIN_USERNAMES", "demo-users-log-admin")
+	r := setupCommentTest(t)
+	admin := createNamedUser(t, "demo-users-log-admin")
+	buyer := createNamedUser(t, "demo-users-log-buyer")
+	merchantUser := createNamedUser(t, "demo-users-log-merchant")
+	createActiveMerchant(t, merchantUser)
+
+	capture := &recordNotFoundCaptureLogger{Interface: config.DB.Logger}
+	originalLogger := config.DB.Logger
+	config.DB.Logger = capture
+	t.Cleanup(func() { config.DB.Logger = originalLogger })
+
+	req := authReq(t, http.MethodGet, "/api/admin/demo-users", "", admin)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if atomic.LoadInt64(&capture.count) != 0 {
+		t.Fatalf("record-not-found logs = %d; want 0", capture.count)
+	}
+
+	var resp struct {
+		Data []struct {
+			ID   uint   `json:"id"`
+			Role string `json:"role"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	roles := map[uint]string{}
+	for _, u := range resp.Data {
+		roles[u.ID] = u.Role
+	}
+	if roles[buyer.ID] != "buyer" {
+		t.Fatalf("buyer role = %q; want buyer", roles[buyer.ID])
+	}
+	if roles[merchantUser.ID] != "merchant" {
+		t.Fatalf("merchant role = %q; want merchant", roles[merchantUser.ID])
 	}
 }

@@ -6,8 +6,8 @@ export function paddleNumberOf(userId: number | null | undefined): string {
   return `№ ${String(userId).padStart(4, '0')}`
 }
 
-// 拍品编号（Lot N°）— 拍品在场刊里的位号。
+// 拍品编号—拍品在场刊里的位号。
 // auction_id 直接 4 位填充。
 export function lotNumberOf(auctionId: number): string {
-  return `Lot N° ${String(auctionId).padStart(4, '0')}`
+  return `拍品 ${String(auctionId).padStart(4, '0')}`
 }
