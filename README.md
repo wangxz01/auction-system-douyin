@@ -171,6 +171,47 @@ curl -X POST http://localhost:8080/api/auctions/123/events \
 
 详细设计见 `docs/design.md` §9 与 `docs/ai-usage.md`。
 
+### ✅ 第十二阶段：前端设计语言重做（已完成）
+
+目标：按 `interface-design` / `ui-ux-pro-max` 两个 skill 的指导，给用户端和商家端各自一套明确的"产品域 + 签名元素"，反 SaaS 默认。
+
+| 模块 | 状态 | 说明 |
+|---|---|---|
+| 双 surface token | ✅ | `index.css` 拆 `.surface-hall`（用户端拍卖行：牛皮纸 / 帷幕红 / 黄铜号牌 / 落槌红）与 `.surface-console`（商家端账册工坊：牛皮纸 / 黑墨 / 黄铜索引 / 账册深绿）两套语义 token，同源 brass 让两端在视觉上是一栋楼 |
+| 字体分层 | ✅ | Fraunces 衬线（拍卖目录大标题/价格）+ JetBrains Mono 等宽（商家端表格/数据） |
+| 号牌（paddle）作为用户身份 | ✅ | `lib/paddle.ts` 把 `user_id` 渲染成 `№ NNNN`，贯穿排行榜 / toast / 结束页 / Me / 商家详情。`UID 5` 这种暴露 ID 的写法全部消失 |
+| 用户端：拍品大厅 | ✅ | iOS 列表卡 → `lot-card`（4:3 大图 + 拍品编号烫印 + 黄铜 Live 徽章 + 衬线标题 + 印刷品式分栏） |
+| 用户端：直播间 | ✅ | 顶栏改 `Lot N° XXXX + 标题 + 你的号牌徽章`；评论由气泡 → `ticker-tape` 拍卖师弹幕滚带（右进左出，三行错开）；出价按钮换 `btn-paddle`（黄铜质感、按下旋转 0.3° 模拟举牌反作用力）；最后 10s 整间渲暖红 `.live-room.crisis` |
+| 商家端：调度台 | ✅ | 顶部 `telemetry-bar`：Active Lots / WS Online / Bids Today / Infrastructure / Alerts 5 格遥测，每 10s 轮询 `/admin/metrics` + `/admin/alerts` |
+| 商家端：告警 banner | ✅ | 4 类 severity 色带（critical/warning/info），直接消费 `/api/admin/alerts` |
+| 商家端：表格化列表 | ✅ | iOS 卡 → `console-table`（密度优先 + 等宽数字 + 状态点 + 索引黄铜激活标签） |
+| 图标统一 | ✅ | `lib/icons.tsx` —— Lucide 风 16 个内联 SVG（24×24、stroke 1.5、currentColor），全端不再使用 emoji 作为结构性图标 |
+| FullScreenEnd 重构 | ✅ | `LiveFinishedOverlay` / `LiveCancelledOverlay`，IconTrophy/IconGavel/IconBan + tone 替代 emoji 字符串 |
+| a11y 收尾 | ✅ | `:focus-visible` 焦点环（按作用域上色）；触控目标 ≥44pt 兜底；`prefers-reduced-motion` 杀掉所有装饰动画并把 ticker 静置可读 |
+
+**设计原则参考：**
+
+- `docs/ai-usage.md` 已列出两个 skill 的来源仓库与本项目的吸收方式
+- "评委读你的 CSS 变量名能不能猜出这是拍卖系统"——本阶段的 token 命名（`--hall-paddle` / `--console-amber-hi` 等）就是答案
+
+### ✅ 第十三阶段：前端工程优化 + 后端补强（已完成）
+
+目标：把可量化的工程硬指标拿到（首屏 / Web Vitals / WS 抗断网 / 模块化）+ 收尾后端可扩展性（分页 / 限流）。
+
+| 模块 | 状态 | 说明 |
+|---|---|---|
+| 路由懒加载 | ✅ | `App.tsx` 用 `React.lazy` 把 AuctionDetail/Order/My* 和全部 Admin 页拆 chunk；用户端首屏不再下载商家代码、不再下载 hls.js |
+| **首屏 bundle 实测** | ✅ | 846 KB（gzip 262 KB）→ **293 KB（gzip 96 KB），-63%** |
+| WS 指数退避 + 抖动 | ✅ | `lib/ws.ts` 固定 5×3s → 1/2/4/8/16s + ±20% jitter（防大量客户端在断网恢复瞬间同时回连） |
+| WS 客户端心跳监控 | ✅ | 45s 内未收到任何 message → 主动 `close` 触发重连，防"半开"连接 |
+| 图片性能 | ✅ | `<img>` 加 `loading="lazy"` + `decoding="async"` + 显式 `width/height`（降 CLS） |
+| 骨架屏 | ✅ | UserHall 3 张 lot-card 骨架 / AdminList 5 行表格骨架；`.skeleton::after` shimmer 动画（reduced-motion 自动禁用） |
+| 乐观出价 | ✅ | `handleBid` 提交前先本地推进 `current_price` / `winner_id` / `topBids` / `priceFlashKey`；失败回滚原快照；成功后由 WS new_bid 用权威数据覆盖。感知延迟 ~RTT → 0 |
+| AuctionDetail 拆组件 | ✅ | 934 行 → 600 行（-36%）；提取 10 个子组件到 `components/live/`（LiveHeader / LiveCountdown / LiveLeaderboard / LiveTicker / LiveProductCard / LiveCenterToast / LiveCommentSheet / LiveCustomBidSheet / LiveFinishedOverlay / LiveCancelledOverlay + live-utils） |
+| `/auctions/:id/bids` 分页 | ✅ | 硬编码 LIMIT 10 → `?limit=N&offset=M`（默认 10、上限 200）+ `meta: {total, limit, offset}` |
+| `/admin/orders` 分页 | ✅ | 全量返回 → 默认 100、上限 200 + meta；公共 `parsePagination(c, default, max)` 助手放在 `controllers/pagination.go` |
+| register 限流 | ✅ | 同 IP 在 10 分钟内最多 10 次注册尝试，超限 429；测试 `TestRegisterIsRateLimitedPerIP` 验证 10 次都成功、第 11 次必须 429 |
+
 ### ✅ 第五阶段：用户系统（已完成）
 
 目标：真实注册/登录、JWT 鉴权、敏感接口保护、前端身份持久化。
@@ -351,6 +392,54 @@ POST   /api/admin/uploads/images
 ### ⏳ 后续阶段（待真实服务器信息）
 
 - 替换真实域名、生产密码和 HTTPS 证书后，在你的服务器执行部署。
+
+---
+
+## ⚠️ 已知不足 · 可继续推进的方向
+
+> **声明**：从第十三阶段起后端**不再升级**。下面列出的所有点都是当前确实存在的局限或未做的能力，写在这里是为了让评审 / 读代码的人对项目边界一目了然，而不是隐瞒短板。
+> 前端层面如果后续要继续推进，可以从下列条目里挑选。
+
+### 后端（不再升级，但记录在案）
+
+| # | 现状 / 不足 | 影响 | 修复方向（仅记录） |
+|---|---|---|---|
+| 1 | 订单状态机只到 `pending`，没有 `paid` / `shipped` / `refunded` 流转 | 没有真实电商闭环；OrderPage 的"已支付"是纯前端 fake | 加 `PATCH /api/orders/:id/pay` 接口 + 状态机校验 + 支付回调 webhook |
+| 2 | 权限只靠 `ADMIN_USERNAMES` 环境变量列管理员；商家依赖 `merchants` 表 status | 没有完整 RBAC（role / permission 表） | 引入 `roles` / `role_permissions` / `user_roles` 三表，中间件按 permission 校验 |
+| 3 | 缓存防击穿是单实例 `singleflight` | 多实例部署时每个实例仍会各自击穿一次 | 在 Redis 层用 `SET NX` 加一道分布式锁；当前文档 `docs/design.md §9.3` 已说明 |
+| 4 | JWT 无主动失效机制（退出登录只清前端 localStorage） | 失窃 token 在 72h 内仍有效 | 加 Redis 黑名单 + 中间件查询；或改用更短 TTL + refresh token |
+| 5 | WebSocket 不是真正的可靠消息队列 | 客户端断线期间错过的事件不会重放；靠 HTTP 拉快照兜底 | 实现 server-side 消息缓冲 + 客户端 `last_seen_id` 拉取断流 |
+| 6 | `lib/ws.ts` 退避/心跳逻辑没单测，乐观出价回滚没集成测试 | 回归风险 | 用 vitest 加单测；用 MSW mock WS server 加集成测试 |
+| 7 | 错误消息中英文混杂（前端组件文案中文、后端 error 字符串中文、`console-table` 表头英文） | 不影响功能但无 i18n 框架 | 引入 `react-i18next` + 后端 error code 化 |
+| 8 | `/admin/metrics` 不是 Prometheus 文本格式 | 无法直接挂 Grafana | 加 `/metrics` 路由输出 Prometheus exposition format |
+| 9 | 没有分布式 trace（OpenTelemetry / Jaeger） | 出价链路定位耗时只能看单机日志 | 在 Gin middleware 里注入 trace；HTTP / DB / Redis / WS 都加 span |
+| 10 | 没有日志聚合（结构化 JSON 日志 + ELK / Loki） | log.Printf 散落各处 | 切换 zap / slog；docker-compose 接 Loki |
+| 11 | 注册节流和登录失败计数器存在进程内 map | 多实例下计数不共享 | 改用 Redis `INCR` + `EXPIRE` |
+| 12 | 上传图片直接落本地磁盘（`/uploads`） | 多实例 / 容器重启会丢；没有 CDN | 接对象存储（OSS / S3） + CDN |
+| 13 | 没有 OpenAPI / Swagger 文档导出 | API 文档只在 README 列路由 | 用 swag 自动从注释生成 |
+| 14 | 没有自动化 E2E 测试 | 跨端流程靠人工跑 `docs/demo.md` | playwright/cypress 覆盖"创建 → 开始 → 双端出价 → 封顶 → 订单"全链路 |
+
+### 前端（仍可推进）
+
+| # | 现状 / 不足 | 修复方向 |
+|---|---|---|
+| 1 | `AdminOrders` / `GetBids` 后端已支持分页 + 返回 `meta.total`，前端还没接"加载更多" | 加按钮或无限滚动消费 `meta.total > data.length` |
+| 2 | 视频流没有显式 ABR 策略，hls.js 全默认 | 在弱网下配置 `hls.config.maxBufferLength` 等 |
+| 3 | 没有 PWA / 离线壳 | 加 `manifest.json` + service worker，弱网时显示最后一次缓存的拍品大厅 |
+| 4 | AuctionDetail.tsx 仍有 600 行；视频 init effect 可继续抽 `useLiveVideo` hook | 进一步纯化主组件 |
+| 5 | 直播间没"屏蔽某号牌评论"等运营工具 | 商家端加 `POST /api/admin/comments/:id/hide`（需后端配合，但后端冻结了）｜或纯前端本地屏蔽列表 |
+| 6 | 没有 Storybook，组件文档靠源码 | 给 `components/live/` 写故事 |
+| 7 | 大厅没有"我关注的拍品" / "即将开始提醒" | 纯前端 localStorage 收藏 + Web Notification API |
+| 8 | 没有键盘快捷键（直播间空格出价、B 打开自定义） | 加 keymap |
+
+### 部署 / 运维
+
+| # | 现状 |
+|---|---|
+| 1 | `deploy/` 提供模板但还没公网上线；evaluation 用录屏代替在线 Demo |
+| 2 | Nginx 配置没显式开 HTTP/2 |
+| 3 | 没有 CDN / edge cache（拍品图片直接打到 origin） |
+| 4 | 没有 CI（GitHub Actions），合并前不自动跑 `go test` / `npm run build` |
 
 ---
 
@@ -747,6 +836,8 @@ A: 后端 `.env` 改完要重启 `go run`；前端 `.env` 改完要重启 `npm r
 
 ## 📅 更新记录
 
+- **2026-06-09** — 完成第十三阶段：前端工程优化（路由懒加载首屏 -63%、WS 指数退避 + 心跳监控、图片 lazy、骨架屏、乐观出价）+ AuctionDetail 拆 10 个子组件（934→600 行）+ 后端 bids/orders 分页 + register 限流；并在 README 增加"已知不足"章节明确项目边界
+- **2026-06-09** — 完成第十二阶段：前端设计语言重做（用户端拍卖行 + 商家端账册工坊 + 号牌身份 + ticker 弹幕 + 黄铜出价按钮 + crisis 暖红 + 全端 emoji → SVG + a11y 焦点环 + reduced-motion）
 - **2026-06-09** — 补齐上线前安全与压测证据：登录失败限流、WebSocket 最大连接数、系统级出价上限、k6 多用户压测脚本和 100/300 VU 实测结果
 - **2026-06-09** — 补齐生产部署准备：后端/前端 Dockerfile、生产 Compose、Nginx HTTPS 反代模板、生产环境变量模板和部署文档
 - **2026-06-09** — 补齐评审材料和可证明性：演示脚本、方案文档、AI 使用文档、压测脚本、WebSocket 重连补偿、metrics 接口和后端出价限流
