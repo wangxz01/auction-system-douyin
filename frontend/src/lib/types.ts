@@ -102,6 +102,16 @@ export interface AdminAlert {
   created_at: string
 }
 
+export interface DemoUser {
+  id: number
+  username: string
+  role: 'merchant' | 'buyer'
+  merchant: string
+  bid_count: number
+  order_count: number
+  auction_count: number
+}
+
 export type WSMessage =
   | { type: 'auction_started'; auction_id: number; ends_at: string; server_time?: string }
   | {

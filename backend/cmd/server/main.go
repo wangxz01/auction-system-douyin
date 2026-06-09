@@ -22,6 +22,9 @@ func main() {
 	ws.InitHub(cfg.MaxWSConnections)
 	config.StartScheduler()
 
+	// 演示种子（SEED_DEMO_DATA=true 时首启灌入；已存在则跳过）
+	config.SeedDemoData(config.DB)
+
 	gin.SetMode(cfg.ServerMode)
 	r := gin.Default()
 

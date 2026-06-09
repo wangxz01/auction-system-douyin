@@ -82,6 +82,26 @@ export function AdminAuctionDetail() {
     }
   }
 
+  const onFinish = async () => {
+    if (!confirm('确认强制结束该竞拍？如果已有领先者，将按当前价格生成订单。')) return
+    try {
+      await api.post(`/admin/auctions/${auctionId}/finish`)
+      load()
+    } catch (e) {
+      alert(extractError(e))
+    }
+  }
+
+  const onDelete = async () => {
+    if (!confirm('确认物理删除该拍卖及其出价、评论、订单、行为数据？')) return
+    try {
+      await api.delete(`/admin/auctions/${auctionId}`)
+      nav('/admin')
+    } catch (e) {
+      alert(extractError(e))
+    }
+  }
+
   const updateEdit = (k: keyof typeof editForm, v: string | number) => {
     setEditForm({ ...editForm, [k]: v })
   }
@@ -153,13 +173,21 @@ export function AdminAuctionDetail() {
             </>
           )}
           {auction.status === 'active' && (
-            <button onClick={onCancel} className="btn-danger px-5 py-2 rounded-full text-sm">
-              强制取消
-            </button>
+            <>
+              <button onClick={onFinish} className="btn-accent px-5 py-2 rounded-full text-sm">
+                强制结束
+              </button>
+              <button onClick={onCancel} className="btn-danger px-5 py-2 rounded-full text-sm">
+                强制取消
+              </button>
+            </>
           )}
           {(auction.status === 'finished' || auction.status === 'cancelled') && (
             <span className="text-[#8E8E93] text-sm self-center">竞拍已结束</span>
           )}
+          <button onClick={onDelete} className="btn-danger px-5 py-2 rounded-full text-sm">
+            删除拍卖
+          </button>
         </div>
       </div>
 

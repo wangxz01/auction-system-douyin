@@ -33,6 +33,10 @@ type Config struct {
 
 	MaxBidAmountCents int64
 	MaxWSConnections  int
+
+	// 演示种子数据：首次启动时灌入预设用户/拍卖/出价/订单。
+	// 已存在则自动跳过；详情见 docs/演示数据.md。
+	SeedDemoData bool
 }
 
 var active *Config
@@ -61,6 +65,8 @@ func Load() *Config {
 
 		MaxBidAmountCents: getEnvInt64("MAX_BID_AMOUNT_CENTS", 100000000),
 		MaxWSConnections:  getEnvInt("WS_MAX_CONNECTIONS", 1000),
+
+		SeedDemoData: getEnvBool("SEED_DEMO_DATA", false),
 	}
 	if cfg.ServerMode != "release" && cfg.JWTSecret == "" {
 		cfg.JWTSecret = "dev-only-do-not-use-in-prod"
@@ -118,6 +124,14 @@ func getEnvInt(key string, fallback int) int {
 		return fallback
 	}
 	return v
+}
+
+func getEnvBool(key string, fallback bool) bool {
+	raw := strings.ToLower(strings.TrimSpace(getEnv(key, "")))
+	if raw == "" {
+		return fallback
+	}
+	return raw == "1" || raw == "true" || raw == "yes" || raw == "on"
 }
 
 func getEnvInt64(key string, fallback int64) int64 {

@@ -58,6 +58,10 @@ func Register(r *gin.Engine) {
 			auth.GET("/admin/alerts", controllers.GetAdminAlerts)
 			auth.GET("/admin/orders", controllers.ListAdminOrders)
 			auth.POST("/admin/uploads/images", controllers.UploadImage)
+			auth.POST("/admin/auctions/:id/finish", controllers.AdminFinishAuction)
+			auth.DELETE("/admin/auctions/:id", controllers.AdminDeleteAuction)
+			auth.GET("/admin/demo-users", controllers.ListDemoUsers)
+			auth.DELETE("/admin/demo-users/:id", controllers.DeleteDemoUser)
 
 			// 当前用户的聚合数据
 			auth.GET("/me/bids", controllers.GetMyBids)

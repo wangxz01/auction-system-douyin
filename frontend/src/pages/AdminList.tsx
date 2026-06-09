@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
-import type { AdminAlert, AdminMetrics, Auction } from '../lib/types'
+import type { AdminAlert, AdminMetrics, Auction, DemoUser } from '../lib/types'
 import { paddleNumberOf } from '../lib/paddle'
 
 export function AdminList() {
@@ -9,6 +9,7 @@ export function AdminList() {
   const [auctions, setAuctions] = useState<Auction[]>([])
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null)
   const [alerts, setAlerts] = useState<AdminAlert[]>([])
+  const [demoUsers, setDemoUsers] = useState<DemoUser[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -29,6 +30,10 @@ export function AdminList() {
       .get<{ data: AdminAlert[] }>('/admin/alerts')
       .then((r) => setAlerts(r.data.data || []))
       .catch(() => setAlerts([]))
+    api
+      .get<{ data: DemoUser[] }>('/admin/demo-users')
+      .then((r) => setDemoUsers(r.data.data || []))
+      .catch(() => setDemoUsers([]))
   }
 
   useEffect(() => {
@@ -55,6 +60,40 @@ export function AdminList() {
     if (!confirm('确认取消该竞拍？')) return
     try {
       await api.post(`/auctions/${id}/cancel`)
+      load()
+    } catch (err) {
+      alert(extractError(err))
+    }
+  }
+
+  const handleFinish = async (e: React.MouseEvent, id: number) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!confirm('确认强制结束该竞拍并按当前领先者生成订单？')) return
+    try {
+      await api.post(`/admin/auctions/${id}/finish`)
+      load()
+    } catch (err) {
+      alert(extractError(err))
+    }
+  }
+
+  const handleDeleteAuction = async (e: React.MouseEvent, id: number) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!confirm('确认物理删除该拍卖及其出价、评论、订单、行为数据？')) return
+    try {
+      await api.delete(`/admin/auctions/${id}`)
+      load()
+    } catch (err) {
+      alert(extractError(err))
+    }
+  }
+
+  const handleDeleteDemoUser = async (id: number, username: string) => {
+    if (!confirm(`确认删除演示用户 ${username}？该用户的出价、评论、订单和行为数据也会清理。`)) return
+    try {
+      await api.delete(`/admin/demo-users/${id}`)
       load()
     } catch (err) {
       alert(extractError(err))
@@ -180,12 +219,19 @@ export function AdminList() {
                       </div>
                     )}
                     {a.status === 'active' && (
-                      <button onClick={(e) => handleCancel(e, a.id)} className="btn-console danger">
-                        Stop
-                      </button>
+                      <div className="flex justify-end gap-2">
+                        <button onClick={(e) => handleFinish(e, a.id)} className="btn-console primary">
+                          Finish
+                        </button>
+                        <button onClick={(e) => handleCancel(e, a.id)} className="btn-console danger">
+                          Stop
+                        </button>
+                      </div>
                     )}
                     {(a.status === 'finished' || a.status === 'cancelled') && (
-                      <span style={{ color: 'var(--console-ink-mute)', fontFamily: 'var(--font-console)', fontSize: 11 }}>—</span>
+                      <button onClick={(e) => handleDeleteAuction(e, a.id)} className="btn-console danger">
+                        Delete
+                      </button>
                     )}
                   </td>
                 </tr>
@@ -193,6 +239,56 @@ export function AdminList() {
             </tbody>
           </table>
         )}
+      </div>
+
+      <div className="console-panel mt-4">
+        <div className="console-panel-header">
+          <span className="title">Demo Users</span>
+          <span className="count">{demoUsers.length} TOTAL</span>
+        </div>
+        <table className="console-table">
+          <thead>
+            <tr>
+              <th style={{ width: 70 }}>User</th>
+              <th>Username</th>
+              <th>Role</th>
+              <th>Merchant</th>
+              <th style={{ textAlign: 'right' }}>Bids</th>
+              <th style={{ textAlign: 'right' }}>Orders</th>
+              <th style={{ textAlign: 'right' }}>Lots</th>
+              <th style={{ textAlign: 'right', width: 110 }}>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {demoUsers.length === 0 && (
+              <tr>
+                <td colSpan={8} className="text-center" style={{ padding: '34px 0', color: 'var(--console-ink-mute)', fontFamily: 'var(--font-console)' }}>
+                  NO DEMO USERS
+                </td>
+              </tr>
+            )}
+            {demoUsers.map((u) => (
+              <tr key={u.id}>
+                <td className="num" style={{ textAlign: 'left', color: 'var(--console-ink-soft)' }}>
+                  #{String(u.id).padStart(4, '0')}
+                </td>
+                <td style={{ color: 'var(--console-ink)' }}>{u.username}</td>
+                <td style={{ color: 'var(--console-ink-soft)', fontFamily: 'var(--font-console)', fontSize: 12 }}>
+                  {u.role.toUpperCase()}
+                </td>
+                <td style={{ color: 'var(--console-ink-soft)' }}>{u.merchant || '—'}</td>
+                <td className="num">{u.bid_count}</td>
+                <td className="num">{u.order_count}</td>
+                <td className="num">{u.auction_count}</td>
+                <td style={{ textAlign: 'right' }}>
+                  <button onClick={() => handleDeleteDemoUser(u.id, u.username)} className="btn-console danger">
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   )

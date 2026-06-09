@@ -20,8 +20,9 @@
 | **a11y** | ✅ `:focus-visible` 焦点环（按 surface 上色）· 触控目标 ≥44pt · `prefers-reduced-motion` 全适配 |
 | **测试** | ✅ 后端 hardening / comment / admin workflow / event / alert / cache / scheduler 单测；前端 `npm run lint` + `npm run build` 干净 |
 | **压测证据** | ✅ k6 100 VU / 300 VU / Redis 降级三组实测数据（`docs/performance.md`） |
+| **演示数据** | ✅ `SEED_DEMO_DATA=true` 首启灌入 14 个 demo 账号、8 场拍卖、出价/评论/行为历史和 1 笔订单 |
 | **部署模板** | ✅ 前后端 Dockerfile · `docker-compose.prod.yml` · Nginx HTTPS 反代 · 生产环境变量样本 |
-| **文档** | ✅ `README.md` · `docs/{design,demo,deployment,performance,ai-usage}.md` · `成果演示DEMO.md` · k6 脚本 |
+| **文档** | ✅ `README.md` · `docs/{design,demo,deployment,performance,ai-usage,演示数据}.md` · `成果演示DEMO.md` · k6 脚本 |
 | **公网部署** | ⬜ 部署由作者本人完成，不在工程范围内 |
 | **演示视频** | ⬜ 同上 |
 
@@ -53,8 +54,8 @@
 
 | 路由 | 页面 | 说明 |
 |---|---|---|
-| <http://localhost:5173/admin> | 竞拍管理 | 全部竞拍表格 + 行内开始/取消（需登录） |
-| `/admin/auctions/:id` | 商品详情 | 商品信息 + 规则查看/编辑（未开始）+ 出价历史 + 订单 + 开始/取消 |
+| <http://localhost:5173/admin> | 竞拍管理 | 全部竞拍表格 + 行内开始/取消/强制结束/删除 + demo 用户维护（需登录） |
+| `/admin/auctions/:id` | 商品详情 | 商品信息 + 规则查看/编辑（未开始）+ 出价历史 + 订单 + 开始/取消/强制结束/删除 |
 | `/admin/create` | 发布商品 | 创建新竞拍，支持图片上传或图片 URL |
 | `/admin/orders` | 订单管理 | 查看当前商家的成交订单和对应竞拍 |
 
@@ -397,6 +398,10 @@ GET    /api/admin/metrics
 GET    /api/admin/alerts
 GET    /api/admin/orders
 POST   /api/admin/uploads/images
+POST   /api/admin/auctions/:id/finish
+DELETE /api/admin/auctions/:id
+GET    /api/admin/demo-users
+DELETE /api/admin/demo-users/:id
 ```
 
 **业务规则要点**
@@ -479,7 +484,8 @@ auction-system/
 │   ├── design.md              # 架构、状态机、并发和权限方案
 │   ├── ai-usage.md            # AI 使用流程和人工把控边界
 │   ├── performance.md         # 压测方法、结果模板和一致性检查 SQL
-│   └── deployment.md          # 生产服务器部署说明
+│   ├── deployment.md          # 生产服务器部署说明
+│   └── 演示数据.md             # 演示账号、拍卖、后台维护操作说明
 ├── deploy/
 │   ├── docker-compose.prod.yml # 生产 Docker Compose 编排
 │   ├── nginx.conf              # HTTPS / API / WS 反向代理模板
@@ -497,6 +503,7 @@ auction-system/
 │   │   ├── db.go              # GORM 连 MySQL + AutoMigrate
 │   │   ├── redis.go           # Redis 客户端 + 出价短锁
 │   │   ├── cache.go           # Redis JSON 短 TTL 读缓存
+│   │   ├── seed.go            # SEED_DEMO_DATA 首启演示数据灌入
 │   │   └── scheduler.go       # 5s 定时扫描过期竞拍
 │   ├── controllers/           # 接口处理函数
 │   │   ├── health_controller.go
@@ -504,6 +511,7 @@ auction-system/
 │   │   ├── auction.go         # 竞拍 CRUD + 开始/取消（含 WS 广播）
 │   │   ├── bid.go             # 出价 + Top10 排行（含 WS 广播）
 │   │   ├── admin_metrics.go   # 管理员轻量监控指标
+│   │   ├── admin_demo.go      # 管理员演示数据维护：强制结束 / 删除拍卖 / 删除 demo 用户
 │   │   ├── order.go           # 查询订单 + 内部 createOrder
 │   │   └── ws.go              # WebSocket 升级 + 心跳泵
 │   ├── middleware/
@@ -745,10 +753,30 @@ ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 ADMIN_USERNAMES=admin
 MAX_BID_AMOUNT_CENTS=100000000
 WS_MAX_CONNECTIONS=1000
+SEED_DEMO_DATA=false
 ```
 
 > `SERVER_MODE=release` 时必须显式配置 `JWT_SECRET` 和 `ALLOWED_ORIGINS`，且 `ALLOWED_ORIGINS` 不能为 `*`。
 > `MAX_BID_AMOUNT_CENTS` 是系统级单笔出价上限，`WS_MAX_CONNECTIONS` 是单后端进程 WebSocket 最大连接数。
+> `SEED_DEMO_DATA=true` 会在首启时灌入演示账号和演示拍卖，只建议本地/受控演示环境开启。
+
+### 演示种子数据
+
+为了方便 3-5 分钟成果演示，后端支持首启自动灌入一套可操作数据：
+
+- 2 个演示商家：`demo-merchant-1`、`demo-merchant-2`
+- 12 个演示买家：`demo-buyer-1` 到 `demo-buyer-12`
+- 8 场演示拍卖：5 场 active、1 场 pending、1 场 finished、1 场 cancelled
+- active 拍卖结束时间动态设置到 14-28 天后，演示窗口大于 10 天
+- 预置出价历史、评论历史、行为埋点和 1 笔成交订单
+
+启用方式：
+
+```env
+SEED_DEMO_DATA=true
+```
+
+完整账号名单、拍卖清单、后台删除/强制结束操作见 [docs/演示数据.md](./docs/演示数据.md)。
 
 ### 超级管理员账号
 
@@ -861,6 +889,7 @@ A: 后端 `.env` 改完要重启 `go run`；前端 `.env` 改完要重启 `npm r
 
 ## 📅 更新记录
 
+- **2026-06-09** — 补齐演示种子数据：`SEED_DEMO_DATA` 首启灌入 14 个 demo 账号、8 场长周期拍卖、出价/评论/行为历史和订单；管理后台新增强制结束、拍卖删除、demo 用户删除；新增 `docs/演示数据.md`
 - **2026-06-09** — 项目冻结，前后端不再继续开发；README 增加"项目完成度总览"和"已知不足 / 可推进方向"章节，明确项目边界
 - **2026-06-09** — 完成第十三阶段：前端工程优化（路由懒加载首屏 -63%、WS 指数退避 + 心跳监控、图片 lazy、骨架屏、乐观出价）+ AuctionDetail 拆 10 个子组件（934→600 行）+ 后端 bids/orders 分页 + register 限流
 - **2026-06-09** — 完成第十二阶段：前端设计语言重做（用户端拍卖行 + 商家端账册工坊 + 号牌身份 + ticker 弹幕 + 黄铜出价按钮 + crisis 暖红 + 全端 emoji → SVG + a11y 焦点环 + reduced-motion）
