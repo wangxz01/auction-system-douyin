@@ -18,8 +18,8 @@
 | **设计语言** | ✅ 用户端「拍卖行」（牛皮纸 + 黄铜号牌 + 衬线）· 商家端「账册工坊」（牛皮纸 + 黑墨 + 黄铜索引 + 账册绿）· 同源 brass · 全端 SVG 图标 |
 | **前端工程** | ✅ 路由懒加载（首屏 -63%）· 图片 lazy + 显式尺寸 · 骨架屏 · 乐观出价（感知延迟 ~RTT → 0）· `AuctionDetail` 拆 10 个子组件 |
 | **a11y** | ✅ `:focus-visible` 焦点环（按 surface 上色）· 触控目标 ≥44pt · `prefers-reduced-motion` 全适配 |
-| **测试** | ✅ 后端 hardening / comment / admin workflow / event / alert / cache / scheduler 单测；前端 `npm run lint` + `npm run build` 干净 |
-| **压测证据** | ✅ k6 100 VU / 300 VU / Redis 降级三组实测数据（`docs/performance.md`） |
+| **测试** | ✅ 后端 hardening / comment / admin workflow / event / alert / cache / scheduler / WS 大房间 fanout 单测；前端 `npm run lint` + `npm run build` 干净 |
+| **压测证据** | ✅ k6 100 VU / 300 VU / Redis 降级三组 HTTP 出价实测；新增 WebSocket 长连接压测脚本 `docs/performance/k6-ws.js` |
 | **演示数据** | ✅ `SEED_DEMO_DATA=true` 首启灌入 14 个 demo 账号、8 场拍卖、出价/评论/行为历史和 1 笔订单 |
 | **部署模板** | ✅ 前后端 Dockerfile · `docker-compose.prod.yml` · Nginx HTTPS 反代 · 生产环境变量样本 |
 | **文档** | ✅ `README.md` · `docs/{design,demo,deployment,performance,ai-usage,演示数据}.md` · `成果演示DEMO.md` · k6 脚本 |
@@ -841,7 +841,7 @@ VITE_API_BASE=http://localhost:8080
 | 防抖节流 | 前端出价按钮有提交态 + 700ms 点击间隔保护，后端同一用户同一竞拍 700ms 兜底限流 |
 | 登录保护 | 登录失败 5 次后 1 分钟内返回 429，降低暴力破解风险 |
 | 金额保护 | 单笔出价先校验系统级 `MAX_BID_AMOUNT_CENTS`，再校验商品封顶价 |
-| 压测证明 | `docs/performance.md` 已记录本地 100 VU、300 VU 和 Redis 降级压测结果 |
+| 压测证明 | `docs/performance.md` 已记录本地 100 VU、300 VU 和 Redis 降级出价压测结果；`k6-ws.js` 可测 100/300/1000 同房间 WS 连接和广播到达率 |
 | 可观测性 | 健康检查 + `/api/admin/metrics` + 关键路径日志 + 测试覆盖；生产级告警面板属于后续部署阶段 |
 
 ### 用户端功能验收
@@ -889,6 +889,7 @@ A: 后端 `.env` 改完要重启 `go run`；前端 `.env` 改完要重启 `npm r
 
 ## 📅 更新记录
 
+- **2026-06-09** — 补齐 WebSocket 大房间验证：新增 `TestBroadcastFanoutToLargeRoom` 覆盖 1000 客户端同房间广播，新增 `docs/performance/k6-ws.js` 用于真实 WS 长连接压测
 - **2026-06-09** — 补齐演示种子数据：`SEED_DEMO_DATA` 首启灌入 14 个 demo 账号、8 场长周期拍卖、出价/评论/行为历史和订单；管理后台新增强制结束、拍卖删除、demo 用户删除；新增 `docs/演示数据.md`
 - **2026-06-09** — 项目冻结，前后端不再继续开发；README 增加"项目完成度总览"和"已知不足 / 可推进方向"章节，明确项目边界
 - **2026-06-09** — 完成第十三阶段：前端工程优化（路由懒加载首屏 -63%、WS 指数退避 + 心跳监控、图片 lazy、骨架屏、乐观出价）+ AuctionDetail 拆 10 个子组件（934→600 行）+ 后端 bids/orders 分页 + register 限流

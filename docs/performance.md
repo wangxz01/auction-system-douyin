@@ -14,6 +14,7 @@ brew install k6
 
 ```bash
 docs/performance/k6-bidding.js
+docs/performance/k6-ws.js
 ```
 
 ## 前置条件
@@ -58,6 +59,54 @@ docker run --rm -v "$PWD:/work" -w /work grafana/k6 run \
   docs/performance/k6-bidding.js
 ```
 
+WebSocket 同房间长连接压测：
+
+```bash
+# 100 个客户端连接同一个房间，并由脚本自动发一条评论触发 new_comment 广播
+k6 run \
+  -e WS_VUS=100 \
+  -e REQUIRE_BROADCAST=true \
+  -e ADMIN_USERNAME=perf-admin \
+  -e ADMIN_PASSWORD=password123 \
+  docs/performance/k6-ws.js
+
+# 300 个客户端
+k6 run \
+  -e WS_VUS=300 \
+  -e REQUIRE_BROADCAST=true \
+  -e ADMIN_USERNAME=perf-admin \
+  -e ADMIN_PASSWORD=password123 \
+  docs/performance/k6-ws.js
+
+# 1000 个客户端；需要后端 WS_MAX_CONNECTIONS >= 1000，且本机文件句柄足够
+ulimit -n 4096
+k6 run \
+  -e WS_VUS=1000 \
+  -e HOLD_SECONDS=30 \
+  -e REQUIRE_BROADCAST=true \
+  -e ADMIN_USERNAME=perf-admin \
+  -e ADMIN_PASSWORD=password123 \
+  docs/performance/k6-ws.js
+```
+
+如果想复用已有拍卖，传入 `AUCTION_ID` 即可：
+
+```bash
+k6 run \
+  -e API_BASE=http://localhost:8080 \
+  -e AUCTION_ID=123 \
+  -e WS_VUS=300 \
+  -e REQUIRE_BROADCAST=true \
+  docs/performance/k6-ws.js
+```
+
+`k6-ws.js` 会统计：
+
+- `ws_connected`：成功建立 WebSocket 的客户端数
+- `ws_connect_failed`：握手失败数
+- `ws_broadcast_received`：收到本轮 `new_comment` 广播的客户端数
+- `ws_broadcast_latency`：广播从 HTTP POST 评论到客户端收到消息的端到端延迟
+
 ## 本地实测结果
 
 运行环境：
@@ -74,6 +123,8 @@ docker run --rm -v "$PWD:/work" -w /work grafana/k6 run \
 | 100 VU 同场出价 | 952 | 100 | 0 | 56.96 ms | ¥100.00 | 0 | 当前价等于最高 bid，100 人全部成功 |
 | 300 VU 同场出价 | 6726 | 295 | 5 | 53.65 ms | ¥295.00 | 0 | 当前价等于最高 bid，5 次逻辑出价在重试耗尽后业务失败 |
 | Redis 不可用降级 100 VU | 970 | 100 | 0 | 54.94 ms | ¥100.00 | 0 | Redis 连接失败时降级到 MySQL 行锁，结果一致 |
+
+WebSocket 大房间压测结果待补。当前仓库已提供 `docs/performance/k6-ws.js`，但在没有实际运行输出前，不把 1000 长连接写成已实测能力。
 
 ## 一致性检查 SQL
 
@@ -117,4 +168,6 @@ WHERE auction_id = <auction_id>;
 系统采用 WebSocket 房间隔离、Redis 短锁、MySQL 行锁和出价幂等键保证实时同步与并发一致性。本地压测已验证 100 VU、300 VU 同场竞拍出价，以及 Redis 不可用时降级到 MySQL 行锁的场景。当前实测未发现低价覆盖高价、排名错乱或重复订单。
 ```
 
-不要在没有压测结果前宣称“已实测 1000+ 在线用户”。
+另外，后端单元测试 `TestBroadcastFanoutToLargeRoom` 已验证内存 Hub 对同一房间 1000 个客户端执行一次广播时，1000 个客户端均能收到消息。该测试证明 Hub fanout 逻辑可回归，但不等同于真实网络长连接压测。
+
+不要在没有 `k6-ws.js` 实测输出前宣称“已实测 1000+ 在线用户”。
