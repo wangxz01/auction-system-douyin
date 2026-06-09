@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import type { MyBidEntry } from '../lib/types'
 import { StatusBadge } from '../components/StatusBadge'
+import { IconBox, IconSpark, IconTrophy } from '../lib/icons'
 
 export function MyBids() {
   const nav = useNavigate()
@@ -37,7 +38,9 @@ export function MyBids() {
       {!loading && list.length === 0 && (
         <div className="mx-4">
           <div className="bg-white rounded-2xl p-12 text-center text-[#8E8E93]">
-            <div className="text-4xl mb-2">🪙</div>
+            <div className="flex justify-center mb-3" style={{ color: 'var(--hall-ink-mute)' }}>
+              <IconBox size={36} />
+            </div>
             <div className="text-sm">还没参与过任何竞拍</div>
             <button
               onClick={() => nav('/')}
@@ -74,8 +77,12 @@ export function MyBids() {
                     }}
                   />
                 ) : (
-                  <div className="w-20 h-20 flex items-center justify-center text-2xl bg-[#F2F2F7]">
-                    📦
+                  <div
+                    className="w-20 h-20 flex items-center justify-center bg-[#F2F2F7]"
+                    style={{ color: 'var(--hall-ink-mute)' }}
+                    aria-hidden="true"
+                  >
+                    <IconBox size={24} />
                   </div>
                 )}
                 <div className="flex-1 px-3 py-2.5 min-w-0">
@@ -99,9 +106,13 @@ export function MyBids() {
                 {cancelled ? (
                   <span className="text-[#8E8E93]">已取消</span>
                 ) : e.is_leading && !finished ? (
-                  <span className="text-[#34C759] font-medium">✨ 你正领先</span>
+                  <span className="text-[#34C759] font-medium inline-flex items-center gap-1">
+                    <IconSpark size={14} />你正领先
+                  </span>
                 ) : e.is_leading && finished ? (
-                  <span className="text-[#34C759] font-medium">🏆 你拍到了</span>
+                  <span className="text-[#34C759] font-medium inline-flex items-center gap-1">
+                    <IconTrophy size={14} />你拍到了
+                  </span>
                 ) : lostFinal ? (
                   <span className="text-[#8E8E93]">未中标</span>
                 ) : (

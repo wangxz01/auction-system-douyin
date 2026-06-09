@@ -1,24 +1,33 @@
+import type { ComponentType, SVGProps } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { IconHome, IconUser } from '../lib/icons'
 
-const TABS = [
-  { to: '/', icon: '🏠', label: '大厅' },
-  { to: '/me', icon: '👤', label: '我的' },
-] as const
+type Tab = {
+  to: string
+  Icon: ComponentType<SVGProps<SVGSVGElement> & { size?: number }>
+  label: string
+}
+
+const TABS: Tab[] = [
+  { to: '/', Icon: IconHome, label: '大厅' },
+  { to: '/me', Icon: IconUser, label: '我的' },
+]
 
 export function BottomNav() {
   const { pathname } = useLocation()
   return (
     <nav className="bottom-nav">
-      {TABS.map((t) => {
-        const active = pathname === t.to
+      {TABS.map(({ to, Icon, label }) => {
+        const active = pathname === to
         return (
           <Link
-            key={t.to}
-            to={t.to}
+            key={to}
+            to={to}
             className={`bottom-nav-item ${active ? 'is-active' : ''}`}
+            aria-current={active ? 'page' : undefined}
           >
-            <div className="text-xl leading-none">{t.icon}</div>
-            <div className="text-[10px] font-medium mt-1">{t.label}</div>
+            <Icon size={22} />
+            <div className="text-[10px] font-medium mt-1">{label}</div>
           </Link>
         )
       })}

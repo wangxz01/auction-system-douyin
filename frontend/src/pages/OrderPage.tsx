@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Auction, Order } from '../lib/types'
+import { IconCheck } from '../lib/icons'
 
 export function OrderPage() {
   const { id } = useParams<{ id: string }>()
@@ -70,7 +71,10 @@ export function OrderPage() {
         <div className="ios-list-item no-icon">
           <span className="flex-1 text-[#3C3C43]">状态</span>
           {paid ? (
-            <span className="text-sm text-[#34C759] font-medium">✓ 已支付</span>
+            <span className="text-sm text-[#34C759] font-medium inline-flex items-center gap-1">
+              <IconCheck size={14} />
+              已支付
+            </span>
           ) : (
             <span className="text-sm text-[#8E8E93]">待支付</span>
           )}

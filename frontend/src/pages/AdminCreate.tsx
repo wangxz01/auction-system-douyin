@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
+import { IconAlert } from '../lib/icons'
 
 export function AdminCreate() {
   const nav = useNavigate()
@@ -182,8 +183,9 @@ export function AdminCreate() {
         </div>
 
         {error && (
-          <div className="mt-6 rounded-xl px-4 py-3 bg-[#FFE5E5] text-[#FF3B30] text-sm">
-            ⚠ {error}
+          <div className="mt-6 rounded-xl px-4 py-3 bg-[#FFE5E5] text-[#FF3B30] text-sm inline-flex items-center gap-2 w-full">
+            <IconAlert size={16} />
+            <span>{error}</span>
           </div>
         )}
 

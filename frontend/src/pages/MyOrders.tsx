@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import type { MyOrderEntry } from '../lib/types'
+import { IconBox, IconInbox } from '../lib/icons'
 
 export function MyOrders() {
   const nav = useNavigate()
@@ -36,7 +37,9 @@ export function MyOrders() {
       {!loading && list.length === 0 && (
         <div className="mx-4">
           <div className="bg-white rounded-2xl p-12 text-center text-[#8E8E93]">
-            <div className="text-4xl mb-2">📭</div>
+            <div className="flex justify-center mb-3" style={{ color: 'var(--hall-ink-mute)' }}>
+              <IconInbox size={36} />
+            </div>
             <div className="text-sm">还没有订单</div>
             <button
               onClick={() => nav('/')}
@@ -68,8 +71,12 @@ export function MyOrders() {
                     }}
                   />
                 ) : (
-                  <div className="w-20 h-20 flex items-center justify-center text-2xl bg-[#F2F2F7]">
-                    📦
+                  <div
+                    className="w-20 h-20 flex items-center justify-center bg-[#F2F2F7]"
+                    style={{ color: 'var(--hall-ink-mute)' }}
+                    aria-hidden="true"
+                  >
+                    <IconBox size={24} />
                   </div>
                 )}
                 <div className="flex-1 px-3 py-2.5 min-w-0">
