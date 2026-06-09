@@ -1237,6 +1237,110 @@ body {
 }
 
 /* ============================================================
+   ♿ a11y + 动画统一收尾（Stage E）
+   - 触控目标 ≥44pt（pill-tab / live-text-btn / btn-* 兜底）
+   - :focus-visible 可见焦点环（两个作用域分别配色）
+   - prefers-reduced-motion：杀死装饰动画并把 ticker 静置可见
+   ============================================================ */
+
+/* —— 焦点环：默认 + 按作用域上色 —— */
+:root {
+  --focus-ring: #FF9500;
+}
+.surface-hall {
+  --focus-ring: var(--hall-velvet);
+}
+.surface-console {
+  --focus-ring: var(--console-cyan);
+}
+.live-room {
+  --focus-ring: rgba(255, 255, 255, 0.95);
+}
+
+:where(a, button, [role="button"], input, select, textarea, [tabindex]):focus {
+  outline: none;
+}
+:where(a, button, [role="button"], input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+/* 在玻璃浮层上用白色 + 阴影描边，更可见 */
+.live-room :where(button, a, [role="button"]):focus-visible {
+  outline-color: var(--focus-ring);
+  box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.35);
+}
+
+/* —— 触控目标兜底（移动端 ≥44pt） —— */
+.pill-tab {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.bottom-nav-item {
+  min-height: 48px;
+}
+/* 直播间倍数 chip 也按 button 用，给足点击区 */
+.live-room .live-text-btn {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+/* 黄铜出价按钮：原来 10/22，bump 到 12/24 让总高 ~44 */
+.btn-paddle {
+  padding: 12px 24px;
+  min-height: 44px;
+}
+/* 商家 console 按钮在桌面密度下保持紧凑，但确保 ≥36 可点 */
+.btn-console {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* —— prefers-reduced-motion —— */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* ticker：不滑动而是静置可读（否则会停在 translateX(110%) 即屏幕外） */
+  .ticker-item {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: translateX(0) !important;
+    position: relative !important;
+    right: auto !important;
+    margin-bottom: 4px;
+  }
+  /* crisis 红 wash：保留色彩，去掉脉冲 */
+  .live-room.crisis::before {
+    animation: none !important;
+    opacity: 0.9 !important;
+  }
+  /* 倒计时 urgent：保留红色文字，去掉缩放 */
+  .countdown-pill.urgent {
+    animation: none !important;
+  }
+  /* 价格 pop：保留金色但不弹 */
+  .price-pop {
+    animation: none !important;
+  }
+  /* 进行中徽章脉冲点 */
+  .lot-live .pulse,
+  .countdown-pill .dot,
+  .console-status.live .dot {
+    animation: none !important;
+  }
+}
+
+/* ============================================================
    🍎 iOS 风格组件（参考 Konsta UI）
    ============================================================ */
 
