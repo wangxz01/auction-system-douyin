@@ -257,7 +257,12 @@ docs/ai-usage.md
 - **缓存失效顺序**：写路径"提交事务 → 清缓存 → 广播"，读路径 cache miss 时用 `singleflight` 保证同 key 并发只触发一次回源（`config/cache.go` 的 `CacheLoadJSON`，单测 `TestCacheLoadJSONDedupsConcurrentLoads` 验证 20 并发只回源 1 次）。
 - **scheduler 重入保护**：扫描 SQL 用 `LIMIT 100`，且每次只处理 `WHERE status='active' AND ends_at < ?`，处理过的拍卖下次自动跳过。
 
-**验证**：3 路径的并发触发由 `TestBidFinishesAtCeiling` / `TestSchedulerFinishesExpired` / `TestAdminForceFinish` 三组测试覆盖，外加一致性 SQL（§14.1）确认任意场景下 `orders.count ≤ 1`。
+**验证**：
+
+- 出价触达封顶路径：`TestDuplicateClientBidIDAfterCeilingIsStillIdempotent` 验证封顶成交后即便重复提交相同 `client_bid_id` 也不会产生多张订单。
+- 商家强制结束路径：`TestAdminForceFinishAuctionCreatesOrder` 验证强制结束生成唯一订单且广播 `auction_finished`。
+- Scheduler 定时收尾路径：`TestAdminAlertsReportStaleActiveAuction` 间接验证 — 拍卖 `ends_at` 已过但仍 `active` 时 `/admin/alerts` 会上报 `stale_active_auction`,等待 5s 调度器收尾(暂未对调度器收尾本身做独立端到端测试,记入 [§ README.full.md「已知不足」](./README.full.md))。
+- 全局一致性 SQL(§14.1)在三轮压测后均确认 `orders.count ≤ 1`、`current_price = MAX(bid)`、`winner_id` 对应最高出价人,不出现因路径竞争导致的数据错乱。
 
 ### 难点三：WebSocket 实时同步的弱网鲁棒性
 
