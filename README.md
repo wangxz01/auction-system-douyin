@@ -1,740 +1,129 @@
 # Auction System 拍卖系统
 
-一个基于 **Go (Gin) + React (Vite + TypeScript) + MySQL + Redis** 的实时拍卖系统。
+> 抖音电商 AI 全栈挑战赛参赛项目。基于 **Go (Gin) + React (Vite + TypeScript) + MySQL + Redis** 的实时直播竞拍系统，面向"直播间高并发出价 + 状态机强一致 + 实时同步"场景。
+
+完整开发记录、阶段说明、压测数据、已知不足等详见 [README.full.md](./README.full.md)。
 
 ---
 
-## 📊 项目完成度总览
+## 1. 项目简介
 
-> **当前状态**：前后端均已冻结，不再做大改动。后续若推进，从「已知不足 / 可推进方向」里挑。
-
-| 维度 | 状态 |
-|---|---|
-| **已完成阶段** | 13 个（详见下文「当前进度」） |
-| **后端核心交易** | ✅ 状态机不可逆 · cents 整数金额 · `client_bid_id` 幂等 · MySQL 行锁 + Redis 短锁双层并发 · 订单 UNIQUE 防重 |
-| **实时同步** | ✅ WebSocket 房间隔离 · 5 类事件 · 客户端指数退避重连 + 45s 心跳监控 · HTTP 拉快照兜底 |
-| **可观测性** | ✅ `/admin/metrics`（active/online/bids/events/alerts 5 项）· `/admin/alerts`（4 类 severity）· singleflight 缓存防击穿 |
-| **用户行为采集** | ✅ `enter_room` / `leave_room` / `bid_chip_click` / `bid_custom_open` / `bid_submit` / `comment_open` 6 类埋点 |
-| **设计语言** | ✅ 用户端「拍卖行」（牛皮纸 + 黄铜号牌 + 衬线）· 商家端「账册工坊」（牛皮纸 + 黑墨 + 黄铜索引 + 账册绿）· 同源 brass · 全端 SVG 图标 |
-| **前端工程** | ✅ 路由懒加载（首屏 -63%）· 图片 lazy + 显式尺寸 · 骨架屏 · 乐观出价（感知延迟 ~RTT → 0）· `AuctionDetail` 拆 10 个子组件 |
-| **a11y** | ✅ `:focus-visible` 焦点环（按 surface 上色）· 触控目标 ≥44pt · `prefers-reduced-motion` 全适配 |
-| **测试** | ✅ 后端 hardening / comment / admin workflow / event / alert / cache / scheduler / WS 大房间 fanout 单测；前端 `npm run lint` + `npm run build` 干净 |
-| **压测证据** | ✅ k6 100 VU / 300 VU / Redis 降级三组 HTTP 出价实测；新增 WebSocket 长连接压测脚本 `docs/performance/k6-ws.js` |
-| **演示数据** | ✅ `SEED_DEMO_DATA=true` 首启灌入 14 个 demo 账号、8 场拍卖、出价/评论/行为历史和 1 笔订单 |
-| **部署模板** | ✅ 前后端 Dockerfile · `docker-compose.prod.yml` · Nginx HTTPS 反代 · 生产环境变量样本 |
-| **文档** | ✅ `README.md` · `docs/{design,demo,deployment,performance,ai-usage,演示数据}.md` · `成果演示DEMO.md` · k6 脚本 |
-| **公网部署** | ⬜ 部署由作者本人完成，不在工程范围内 |
-| **演示视频** | ⬜ 同上 |
-
-→ 详细局限请看页面后部的 [⚠️ 已知不足 · 可继续推进的方向](#-已知不足--可继续推进的方向)。
+- **业务定位**：抖音电商直播场景下的实时拍卖平台,用户在 H5 直播间出价,商家在 PC 后台发布商品与管理订单。
+- **核心能力**:
+  - 实时出价 + WebSocket 同步(按竞拍房间隔离,5 类事件广播)
+  - 复杂竞拍规则:0 元起拍、固定加价幅度、封顶价、10-30 秒自动延时、状态机不可逆
+  - 高并发一致性:Redis 短锁 + MySQL 事务 + `SELECT … FOR UPDATE` + `client_bid_id` 幂等 + 订单唯一索引
+  - 可观测性:`/admin/metrics` 5 项指标 + `/admin/alerts` 4 类告警 + 6 类行为埋点
+- **强隔离**:用户端(H5 / 移动端)与商家端(PC / 管理后台)路由完全分离,无互相跳转入口。
+- **演示数据**:`SEED_DEMO_DATA=true` 首启自动灌入 14 个 demo 账号 + 8 场拍卖 + 出价 / 评论 / 订单历史。
 
 ---
 
-## 🚪 两端入口（默认 dev 地址）
+## 2. 依赖环境
 
-> **强隔离**：用户端和商家端没有任何互相跳转的入口，按业务边界各自独立。商家入口只能从用户端「我的」页面进入。
-
-### 🛒 用户端（消费者 / 移动端 H5）
-
-| 路由 | 页面 | 说明 |
-|---|---|---|
-| <http://localhost:5173/> | 大厅 | 进行中 & 未开始的竞拍列表 |
-| `/auction/:id` | 详情 | 实时出价 + 倒计时 + 排行（WebSocket） |
-| `/auction/:id/order` | 订单 | 中标后查看 + 模拟支付（需登录） |
-| `/me` | 我的 | 用户信息 + 退出 + 商家后台入口 |
-| `/login` | 登录 | 登录 / 注册切换 |
-
-底部固定 Tab 栏：大厅 / 我的（SVG 图标 + 文字，详情/订单/登录页不显示）
-
-### 🛠️ 商家端（管理后台 / PC 宽屏）
-
-固定的左侧导航栏（参考桌面 App 风格），右侧大块内容区。商家端**没有任何回跳用户端的入口**，与用户端完全隔离。
-
-当前开发环境已创建 `admin` 账号，并通过后端环境变量 `ADMIN_USERNAMES=admin` 设置为超级管理员。使用 `admin` 登录后可进入 `/admin` 系列页面，管理全部竞拍、商家和订单。普通商家账号需要先在 `merchants` 表中处于 `active` 状态，只能管理自己发布的竞拍和订单。
-
-| 路由 | 页面 | 说明 |
-|---|---|---|
-| <http://localhost:5173/admin> | 竞拍管理 | 全部竞拍表格 + 行内开始/取消/强制结束/删除 + demo 用户维护（需登录） |
-| `/admin/auctions/:id` | 商品详情 | 商品信息 + 规则查看/编辑（未开始）+ 出价历史 + 订单 + 开始/取消/强制结束/删除 |
-| `/admin/create` | 发布商品 | 创建新竞拍，支持图片上传或图片 URL |
-| `/admin/orders` | 订单管理 | 查看当前商家的成交订单和对应竞拍 |
-
-左侧栏：黄铜槌牌 Logo · 竞拍管理 · 发布商品 · 订单管理 · 当前账号 · 退出（全部使用 Lucide 风 SVG 图标，激活态有黄铜索引色条）
-
-> 用户端页面按手机尺寸设计。桌面浏览器访问会自动套一个 iPhone 形状的边框（含灵动岛 + 状态栏），底部 Tab 栏锚定在手机屏幕内部，整体视觉就像一台真机摆在桌面上。窗口宽度 < 768px 时（真机访问或开发者工具切到移动模式）边框自动隐藏。
-
----
-
-## 📌 当前进度
-
-### ✅ 第一阶段：项目框架（已完成）
-
-目标：把前端、后端、数据库三方环境跑通，前端能成功调用后端接口。
-
-| 模块 | 状态 | 说明 |
-|---|---|---|
-| Go 后端框架 | ✅ | gin + gorm + redis + websocket + godotenv 依赖装好 |
-| 后端目录结构 | ✅ | cmd / config / controllers / models / routes |
-| `/health` 接口 | ✅ | 浏览器访问返回 JSON |
-| `.env` 配置 | ✅ | 服务端口、数据库、Redis 全部参数化 |
-| React + TS 前端 | ✅ | Vite 脚手架，dev server 跑在 5173 |
-| 前端调后端 | ✅ | 首页用 fetch 调 `/health` 并展示结果 |
-| MySQL 容器 | ✅ | Docker 启动，3306 端口可连 |
-| Redis 容器 | ✅ | Docker 启动，6379 端口可连 |
-| CORS 跨域 | ✅ | 后端允许 `http://localhost:5173` |
-
-### ✅ 第六阶段：UI 美化 · 液态玻璃风（已完成）
-
-目标：把前端从「能用」升级到「好看」——参考截图的暖色调极简风 + iOS 26 液态玻璃。
-
-| 模块 | 状态 | 说明 |
-|---|---|---|
-| 设计系统 | ✅ | `index.css` 集中定义颜色 token / 玻璃工具类 / 按钮 / FAB |
-| 暖色 mesh 背景 | ✅ | 4 层径向渐变（暖黄/暖橙/粉/暖白），fixed 不滚 |
-| `.glass` 工具类 | ✅ | `backdrop-filter: blur(24px) saturate(180%)` + 内嵌高光 |
-| `.glass-strong` / `.glass-warm` / `.glass-soft` | ✅ | 不同强度变体 |
-| `.btn-accent` | ✅ | 黄橙渐变 + 内外阴影 + hover 上浮 |
-| `.fab` | ✅ | 商家列表悬浮加号按钮 |
-| `.pill-group` / `.pill-tab` | ✅ | 登录页登录/注册切换 |
-| 配色统一 | ✅ | 主色 `#FFB627`/`#FF9500`；StatusBadge 改用玻璃色彩 |
-| 微动效 | ✅ | `flash-pop`（出价后价格高亮）+ `fade-up`（卡片进场） |
-| 6 个页面全部重做 | ✅ | UserHall / AuctionDetail / OrderPage / AdminList / AdminCreate / Login |
-| 生产构建 | ✅ | 302 KB JS / 30 KB CSS |
-
-### ✅ 第七阶段：后端核心加固（已完成）
-
-目标：补齐拍卖核心正确性、权限边界和生产安全配置。
-
-| 模块 | 状态 | 说明 |
-|---|---|---|
-| 出价事务 | ✅ | `PlaceBid` 使用事务 + `SELECT ... FOR UPDATE`，避免并发低价覆盖高价 |
-| 金额整数化 | ✅ | 新增 `*_cents` 字段，核心校验按“分”计算，旧元字段保留兼容 |
-| 商家权限 | ✅ | 新增 `merchants` 表，创建/开始/取消竞拍要求商家或管理员 |
-| 商家管理 | ✅ | `ADMIN_USERNAMES` 指定管理员，可创建/禁用商家 |
-| 订单保护 | ✅ | 订单查询需登录，仅中标用户、竞拍商家或管理员可看 |
-| 生产安全配置 | ✅ | release 模式必须显式配置 `JWT_SECRET` 和 `ALLOWED_ORIGINS` |
-| 评论历史一致性 | ✅ | 不存在的竞拍评论历史返回 404 |
-| 后端测试 | ✅ | 覆盖评论、权限、金额分字段、订单保护、并发出价和安全配置 |
-
-### ✅ 第八阶段：商家后台基础补齐（已完成）
-
-目标：补齐商家/主播端的发布、商品管理和订单管理基础工作流，界面先保持简单可用。
-
-| 模块 | 状态 | 说明 |
-|---|---|---|
-| 图片上传 | ✅ | `POST /api/admin/uploads/images` 保存图片并返回可访问 URL |
-| 延时机制配置 | ✅ | 创建/编辑竞拍时可配置 `auto_extend_seconds` |
-| 未开始竞拍编辑 | ✅ | `PUT /api/auctions/:id` 仅允许修改 pending 竞拍 |
-| 订单管理页 | ✅ | `/admin/orders` 查看商家的成交订单 |
-| 后端测试 | ✅ | 覆盖编辑规则、订单列表、上传图片和自定义延时 |
-
-### ✅ 第九阶段：用户端竞价体验与高并发补强（已完成）
-
-目标：围绕“复杂规则零漏洞”和“毫秒级实时同步”补齐验收重点，用户端保持简单可用但链路完整。
-
-| 模块 | 状态 | 说明 |
-|---|---|---|
-| 0 元起拍 | ✅ | `start_price_cents` 允许为 0，首次有效出价仍需满足固定加价幅度 |
-| 自动延时范围 | ✅ | `auto_extend_seconds` 限制为 10-30 秒，缺省 30 秒 |
-| 出价幂等 | ✅ | `client_bid_id` + 数据库唯一索引，同一用户同一竞拍同一点击只落库一次 |
-| Redis 出价锁 | ✅ | Redis 可用时对单场竞拍加短 TTL 分布式锁；Redis 不可用时降级到数据库行锁 |
-| Redis 读缓存 | ✅ | 竞拍列表/详情/统计使用短 TTL 缓存，写路径统一失效 |
-| 实时同步字段 | ✅ | `new_bid` 广播参与人数、是否延时、服务器时间、Top 排行 |
-| 毫秒倒计时 | ✅ | 前端 100ms 刷新，并根据后端 `server_time` 做时钟偏移校准 |
-| 竞价氛围 | ✅ | 领先/被超越/延时/结束 toast，价格动画，提示音，实时排行榜 |
-| 用户历史 | ✅ | `/me/bids` 浏览参与过的竞拍，`/me/orders` 浏览成交订单 |
-| 重连补偿 | ✅ | WebSocket 重连成功后重新拉取详情、统计和评论，补偿断线期间丢失消息 |
-| 轻量监控 | ✅ | `GET /api/admin/metrics` 返回活跃竞拍、WS 在线、今日出价、DB/Redis 状态 |
-| 后端限流 | ✅ | 同一用户同一竞拍 700ms 内不同幂等键重复出价返回 429 |
-| 项目材料 | ✅ | 新增 `docs/demo.md`、`docs/design.md`、`docs/ai-usage.md`、`docs/performance.md` |
-| 后端测试 | ✅ | 覆盖 0 元起拍、延时范围、幂等出价、限流、metrics、实时广播元数据 |
-
-### ✅ 第十阶段：生产部署准备（已完成）
-
-目标：补齐部署到自有服务器和域名所需的生产文件与说明；真实上线需替换域名、证书和强密码。
-
-| 模块 | 状态 | 说明 |
-|---|---|---|
-| 后端镜像 | ✅ | `backend/Dockerfile` 多阶段构建 Go release 二进制 |
-| 前端镜像 | ✅ | `frontend/Dockerfile` 构建静态资源并用 Nginx 托管 |
-| 生产编排 | ✅ | `deploy/docker-compose.prod.yml` 编排 MySQL、Redis、后端、前端、Nginx |
-| Nginx 反代 | ✅ | `deploy/nginx.conf` 支持 `/api`、`/ws`、`/uploads` 和 HTTPS |
-| 生产环境模板 | ✅ | `deploy/.env.prod.example` 列出 release 必填配置 |
-| 部署文档 | ✅ | `docs/deployment.md` 说明服务器部署、证书、启动和排错 |
-| 生产 API 地址 | ✅ | 前端生产环境默认使用当前域名，同源访问 `/api` 和 `wss://.../ws` |
-
-### ✅ 第十一阶段：可观测性 / 缓存防击穿 / 行为埋点（已完成）
-
-目标：补齐"竞拍状态监控、异常告警、热点 key 防击穿、用户行为采集"等评审硬性指标。
-
-| 模块 | 状态 | 说明 |
-|---|---|---|
-| 缓存防击穿 | ✅ | `config/cache.go` 新增 `CacheLoadJSON`，基于 `singleflight` 同 key 并发未命中只触发一次 loader，配套单测 `TestCacheLoadJSONDedupsConcurrentLoads` 验证 20 并发只执行 1 次 |
-| 热点读路径切换 | ✅ | `GetAuctions` / `GetAuction` / `GetAuctionStats` 三个高频接口接入新缓存 |
-| 管理端告警接口 | ✅ | `GET /api/admin/alerts` 返回 4 类结构化告警：`db_unavailable` / `redis_unavailable` / `stale_active_auction` / `ws_capacity_high` |
-| metrics 集成告警计数 | ✅ | `GET /api/admin/metrics` 新增 `alert_count` 字段，前端可轮询一个接口判断是否展开告警 |
-| 用户行为埋点 | ✅ | `models/UserEvent` 表 + `POST /api/auctions/:id/events`，记录 `event_type` / `metadata` / `user_agent` |
-| 行为指标 | ✅ | `metrics.total_events_today` 暴露今日埋点总数 |
-| 测试覆盖 | ✅ | `cache_test.go`、`admin_alerts_test.go`（权限/stale 告警/alert_count）、`event_test.go`（落库/空类型拒绝） |
-
-**告警分级：**
-
-| code | severity | 触发条件 |
-|---|---|---|
-| `db_unavailable` | critical | DB ping 200ms 内失败 |
-| `redis_unavailable` | warning | Redis ping 200ms 内失败（系统自动降级到 MySQL 行锁） |
-| `stale_active_auction` | warning | 竞拍 `ends_at` 已过但仍为 `active`，等待 5s 调度器收尾 |
-| `ws_capacity_high` | warning | WebSocket 在线连接达到 `WS_MAX_CONNECTIONS` 的 80% |
-
-**埋点请求示例：**
-
-```bash
-curl -X POST http://localhost:8080/api/auctions/123/events \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"event_type":"enter_room","metadata":"{\"source\":\"hall\"}"}'
-```
-
-详细设计见 `docs/design.md` §9 与 `docs/ai-usage.md`。
-
-### ✅ 第十二阶段：前端设计语言重做（已完成）
-
-目标：按 `interface-design` / `ui-ux-pro-max` 两个 skill 的指导，给用户端和商家端各自一套明确的"产品域 + 签名元素"，反 SaaS 默认。
-
-| 模块 | 状态 | 说明 |
-|---|---|---|
-| 双 surface token | ✅ | `index.css` 拆 `.surface-hall`（用户端拍卖行：牛皮纸 / 帷幕红 / 黄铜号牌 / 落槌红）与 `.surface-console`（商家端账册工坊：牛皮纸 / 黑墨 / 黄铜索引 / 账册深绿）两套语义 token，同源 brass 让两端在视觉上是一栋楼 |
-| 字体分层 | ✅ | Fraunces 衬线（拍卖目录大标题/价格）+ JetBrains Mono 等宽（商家端表格/数据） |
-| 号牌（paddle）作为用户身份 | ✅ | `lib/paddle.ts` 把 `user_id` 渲染成 `№ NNNN`，贯穿排行榜 / toast / 结束页 / Me / 商家详情。`UID 5` 这种暴露 ID 的写法全部消失 |
-| 用户端：拍品大厅 | ✅ | iOS 列表卡 → `lot-card`（4:3 大图 + 拍品编号烫印 + 黄铜 Live 徽章 + 衬线标题 + 印刷品式分栏） |
-| 用户端：直播间 | ✅ | 顶栏改 `Lot N° XXXX + 标题 + 你的号牌徽章`；评论由气泡 → `ticker-tape` 拍卖师弹幕滚带（右进左出，三行错开）；出价按钮换 `btn-paddle`（黄铜质感、按下旋转 0.3° 模拟举牌反作用力）；最后 10s 整间渲暖红 `.live-room.crisis` |
-| 商家端：调度台 | ✅ | 顶部 `telemetry-bar`：Active Lots / WS Online / Bids Today / Infrastructure / Alerts 5 格遥测，每 10s 轮询 `/admin/metrics` + `/admin/alerts` |
-| 商家端：告警 banner | ✅ | 4 类 severity 色带（critical/warning/info），直接消费 `/api/admin/alerts` |
-| 商家端：表格化列表 | ✅ | iOS 卡 → `console-table`（密度优先 + 等宽数字 + 状态点 + 索引黄铜激活标签） |
-| 图标统一 | ✅ | `lib/icons.tsx` —— Lucide 风 16 个内联 SVG（24×24、stroke 1.5、currentColor），全端不再使用 emoji 作为结构性图标 |
-| FullScreenEnd 重构 | ✅ | `LiveFinishedOverlay` / `LiveCancelledOverlay`，IconTrophy/IconGavel/IconBan + tone 替代 emoji 字符串 |
-| a11y 收尾 | ✅ | `:focus-visible` 焦点环（按作用域上色）；触控目标 ≥44pt 兜底；`prefers-reduced-motion` 杀掉所有装饰动画并把 ticker 静置可读 |
-
-**设计原则参考：**
-
-- `docs/ai-usage.md` 已列出两个 skill 的来源仓库与本项目的吸收方式
-- "评委读你的 CSS 变量名能不能猜出这是拍卖系统"——本阶段的 token 命名（`--hall-paddle` / `--console-amber-hi` 等）就是答案
-
-### ✅ 第十三阶段：前端工程优化 + 后端补强（已完成）
-
-目标：把可量化的工程硬指标拿到（首屏 / Web Vitals / WS 抗断网 / 模块化）+ 收尾后端可扩展性（分页 / 限流）。
-
-| 模块 | 状态 | 说明 |
-|---|---|---|
-| 路由懒加载 | ✅ | `App.tsx` 用 `React.lazy` 把 AuctionDetail/Order/My* 和全部 Admin 页拆 chunk；用户端首屏不再下载商家代码、不再下载 hls.js |
-| **首屏 bundle 实测** | ✅ | 846 KB（gzip 262 KB）→ **293 KB（gzip 96 KB），-63%** |
-| WS 指数退避 + 抖动 | ✅ | `lib/ws.ts` 固定 5×3s → 1/2/4/8/16s + ±20% jitter（防大量客户端在断网恢复瞬间同时回连） |
-| WS 客户端心跳监控 | ✅ | 45s 内未收到任何 message → 主动 `close` 触发重连，防"半开"连接 |
-| 图片性能 | ✅ | `<img>` 加 `loading="lazy"` + `decoding="async"` + 显式 `width/height`（降 CLS） |
-| 骨架屏 | ✅ | UserHall 3 张 lot-card 骨架 / AdminList 5 行表格骨架；`.skeleton::after` shimmer 动画（reduced-motion 自动禁用） |
-| 乐观出价 | ✅ | `handleBid` 提交前先本地推进 `current_price` / `winner_id` / `topBids` / `priceFlashKey`；失败回滚原快照；成功后由 WS new_bid 用权威数据覆盖。感知延迟 ~RTT → 0 |
-| AuctionDetail 拆组件 | ✅ | 934 行 → 600 行（-36%）；提取 10 个子组件到 `components/live/`（LiveHeader / LiveCountdown / LiveLeaderboard / LiveTicker / LiveProductCard / LiveCenterToast / LiveCommentSheet / LiveCustomBidSheet / LiveFinishedOverlay / LiveCancelledOverlay + live-utils） |
-| `/auctions/:id/bids` 分页 | ✅ | 硬编码 LIMIT 10 → `?limit=N&offset=M`（默认 10、上限 200）+ `meta: {total, limit, offset}` |
-| `/admin/orders` 分页 | ✅ | 全量返回 → 默认 100、上限 200 + meta；公共 `parsePagination(c, default, max)` 助手放在 `controllers/pagination.go` |
-| register 限流 | ✅ | 同 IP 在 10 分钟内最多 10 次注册尝试，超限 429；测试 `TestRegisterIsRateLimitedPerIP` 验证 10 次都成功、第 11 次必须 429 |
-
-### ✅ 第五阶段：用户系统（已完成）
-
-目标：真实注册/登录、JWT 鉴权、敏感接口保护、前端身份持久化。
-
-| 模块 | 状态 | 说明 |
-|---|---|---|
-| User 表加 PasswordHash | ✅ | bcrypt 哈希，`json:"-"` 防泄漏 |
-| `POST /api/auth/register` | ✅ | 用户名 2~32 字符；密码 ≥ 6 位；返回 token |
-| `POST /api/auth/login` | ✅ | bcrypt 比对；错误统一回「用户名或密码错误」 |
-| `GET /api/auth/me` | ✅ | 凭 JWT 返回当前用户信息 |
-| JWT 中间件 | ✅ | `middleware/auth.go`，签发 + 验证 + 注入 `user_id` 到 gin.Context |
-| 路由分组保护 | ✅ | GET 公开；POST 三类（创建/开始/取消/出价）需登录 |
-| place_bid 改用 JWT | ✅ | body 不再接收 user_id，从 token 取，**杜绝伪造身份** |
-| 前端 `lib/auth.ts` | ✅ | token/user 存 localStorage |
-| axios 拦截器 | ✅ | 自动附 `Authorization: Bearer xxx`；401 跳 `/login?from=...` |
-| `/login` 页 | ✅ | 登录/注册 tab 切换；登录后跳回原路径 |
-| `<RequireAuth>` 包裹 | ✅ | `/admin`、`/admin/create`、订单页未登录跳登录 |
-| 顶部用户名 + 退出 | ✅ | UserHall / AdminList 展示登录态 |
-
-**鉴权流程**
-
-```
-浏览器                                      后端
-  │  POST /api/auth/register {user,pw}      │
-  │ ───────────────────────────────────────►│ bcrypt 加密 + 入库
-  │                                         │ 签发 JWT (HS256, 72h)
-  │ ◄──────────────────────────────── {token}│
-  │  localStorage.setItem('auction_token')   │
-  │                                         │
-  │  POST /api/auctions/:id/bids             │
-  │  Authorization: Bearer <token>           │
-  │ ───────────────────────────────────────►│ 中间件验证 JWT
-  │                                         │ user_id 注入 context
-  │                                         │ 业务逻辑用 ctx 里的 uid
-  │ ◄────────────────────────── {data: ...}  │
-```
-
-### ✅ 第四阶段：前端业务页面（已完成）
-
-目标：双端 H5/PC 页面，对接 HTTP 接口与 WebSocket 实时推送。
-
-| 模块 | 状态 | 说明 |
-|---|---|---|
-| 路由 | ✅ | `react-router-dom` 5 个路由 |
-| Tailwind CSS | ✅ | v4 + `@tailwindcss/vite`，零配置 |
-| axios 客户端 | ✅ | `src/api/client.ts`，统一 baseURL |
-| WebSocket 客户端 | ✅ | `src/lib/ws.ts`，5 次自动重连，间隔 3s |
-| user_id | ✅ | localStorage 持久化随机 ID |
-| 公共组件 | ✅ | `StatusBadge`、`Countdown`（最后 30s 变红） |
-| 商家列表 `/admin` | ✅ | 表格 + 按状态显示开始/取消按钮 |
-| 商家创建 `/admin/create` | ✅ | 表单 + 错误显示 + 跳转回列表 |
-| 用户大厅 `/` | ✅ | H5 卡片，过滤 active/pending |
-| 详情页 `/auction/:id` | ✅ | 实时刷新最高价/排行/倒计时；超越提示；结束页 |
-| 订单页 `/auction/:id/order` | ✅ | 模拟支付按钮 |
-| 生产构建 | ✅ | `npm run build` 通过，295KB JS / 22KB CSS |
-
-**重点：详情页的 WebSocket 行为**
-
-| WS 事件 | 页面反应 |
-|---|---|
-| `auction_started` | 状态变 active，开始倒计时 |
-| `new_bid` | 最高价数字黄色闪烁 + 排行刷新 + 倒计时同步；若我是 winner → 绿条「你正在领先」；若我曾出价但被超越 → 黄条「你被超越了」 |
-| `auction_finished` | 切换到结束页；赢家看到 🏆 + 「查看订单」按钮 |
-| `auction_cancelled` | 切换到 🚫 取消页 |
-| 断线 | 顶部显示「正在重连…」，5 次后才彻底放弃 |
-
-### ✅ 第三阶段：WebSocket 实时通信（已完成）
-
-目标：在关键业务节点向所有在线客户端实时推送事件，替代轮询。
-
-| 模块 | 状态 | 说明 |
-|---|---|---|
-| Hub 房间管理器 | ✅ | `ws/hub.go`，按 `auction_id` 分房间，goroutine + channel 串行化所有操作 |
-| WS 连接接口 | ✅ | `controllers/ws.go`，HTTP → WebSocket 升级，readPump/writePump 双 goroutine |
-| 心跳保活 | ✅ | 每 30s ping，60s 无消息断开 |
-| 事件广播 | ✅ | start / cancel / new_bid / finished 四类事件接入 |
-| 路由 | ✅ | `GET /ws/auctions/:id` |
-| E2E 测试 | ✅ | 两个客户端并发订阅，验证广播、断开互不影响 |
-
-**事件消息格式**
-
-```jsonc
-// 竞拍开始
-{"type":"auction_started","auction_id":1,"ends_at":"...","server_time":"..."}
-
-// 新出价（每次出价后广播）
-{"type":"new_bid","auction_id":1,"current_price":130,"winner_id":2,
- "ends_at":"...","participant_count":23,"auto_extended":true,
- "auto_extend_seconds":20,"server_time":"...",
- "top_bids":[{"user_id":2,"amount":130},...]}
-
-// 竞拍结束（封顶价命中 或 定时器到期触发）
-{"type":"auction_finished","auction_id":1,"final_price":150,"winner_id":3,"server_time":"..."}
-
-// 竞拍取消
-{"type":"auction_cancelled","auction_id":1,"server_time":"..."}
-```
-
-**前端连接方式**
-
-```js
-const ws = new WebSocket(`ws://localhost:8080/ws/auctions/${auctionID}`)
-ws.onmessage = (e) => {
-  const msg = JSON.parse(e.data)
-  switch (msg.type) {
-    case 'auction_started':   /* ... */ break
-    case 'new_bid':           /* ... */ break
-    case 'auction_finished':  /* ... */ break
-    case 'auction_cancelled': /* ... */ break
-  }
-}
-```
-
-### ✅ 第二阶段：后端业务接口（已完成）
-
-目标：实现拍卖系统全部核心后端接口，含数据库连接、模型、竞拍/出价/订单业务、定时任务。
-
-| 模块 | 状态 | 说明 |
-|---|---|---|
-| 数据库连接 | ✅ | `config/db.go` 用 GORM 连 MySQL，启动时 AutoMigrate 建表 |
-| 数据模型 | ✅ | User / Merchant / Auction / Bid / Order / Comment |
-| 竞拍接口 | ✅ | 创建 / 列表 / 详情 / 开始 / 取消，5 个接口 |
-| 出价接口 | ✅ | 出价（含加价/封顶/自动延时校验）+ Top10 排行榜 |
-| 订单接口 | ✅ | 按 auction_id 查订单；需登录且校验可见权限 |
-| 定时任务 | ✅ | `config/scheduler.go` 每 5s 扫描过期 active 竞拍，自动 finished 并生成订单 |
-| CORS | ✅ | 由 `ALLOWED_ORIGINS` 配置，release 模式必须显式设置 |
-| E2E 测试 | ✅ | curl 全流程跑通：创建→开始→出价→封顶/超时→查订单 |
-
-**已注册路由清单**
-
-```
-GET    /health
-POST   /api/auth/register
-POST   /api/auth/login
-GET    /api/auctions
-GET    /api/auctions/:id
-GET    /api/auctions/:id/bids
-GET    /api/auctions/:id/stats
-GET    /api/auctions/:id/comments
-GET    /ws/auctions/:id
-
-# 以下接口需要 Authorization: Bearer <token>
-GET    /api/auth/me
-POST   /api/auctions
-PUT    /api/auctions/:id
-POST   /api/auctions/:id/start
-POST   /api/auctions/:id/cancel
-POST   /api/auctions/:id/bids
-POST   /api/auctions/:id/comments
-POST   /api/auctions/:id/events
-GET    /api/auctions/:id/order
-GET    /api/me/bids
-GET    /api/me/orders
-GET    /api/admin/merchants
-POST   /api/admin/merchants
-DELETE /api/admin/merchants/:user_id
-GET    /api/admin/metrics
-GET    /api/admin/alerts
-GET    /api/admin/orders
-POST   /api/admin/uploads/images
-POST   /api/admin/auctions/:id/finish
-DELETE /api/admin/auctions/:id
-GET    /api/admin/demo-users
-DELETE /api/admin/demo-users/:id
-```
-
-**业务规则要点**
-
-- 所有成功响应 `{"data": ...}`，失败响应 `{"error": "原因"}`
-- 出价校验顺序：状态 → 是否过期 → 加价幅度 → 封顶价
-- 0 元起拍：`start_price_cents` 可为 0；首次出价必须高于当前价并满足加价幅度
-- 加价规则：`amount_cents = current_price_cents + n × price_step_cents` (n ≥ 1)
-- 自动延时：`auto_extend_seconds` 只允许 10-30 秒；距 `ends_at` 不足该秒数时出价会延后结束时间
-- 封顶价命中：立即 finished + 生成订单
-- 出价幂等：前端每次点击生成 `client_bid_id`；后端通过唯一索引避免同一点击重复落库
-- 出价限流：同一用户同一竞拍 700ms 内不同 `client_bid_id` 的重复出价返回 429
-- 并发控制：Redis 可用时先抢单场竞拍短 TTL 出价锁，再进入 MySQL 事务 + `SELECT ... FOR UPDATE`
-- 读写分离：列表/详情/统计走 Redis 短 TTL 读缓存，创建/编辑/开始/取消/出价后清理缓存，写入仍以 MySQL 为准
-- 定时器幂等：用条件更新避免与封顶价路径重复生成订单
-- 订单表 `auction_id` 加唯一索引，双保险
-
-### ⏳ 后续阶段（待真实服务器信息）
-
-- 替换真实域名、生产密码和 HTTPS 证书后，在你的服务器执行部署。
-
----
-
-## ⚠️ 已知不足 · 可继续推进的方向
-
-> **声明**：从第十三阶段起，**前端和后端均不再继续开发**。下面列出的所有点都是当前确实存在的局限或未做的能力，写在这里是为了让评审 / 读代码的人对项目边界一目了然——这是工程成熟度的信号，不是隐瞒短板。
-> 若有后续维护者想推进，可直接从下列条目里挑。
-
-### 后端（不再升级，但记录在案）
-
-| # | 现状 / 不足 | 影响 | 修复方向（仅记录） |
-|---|---|---|---|
-| 1 | 订单状态机只到 `pending`，没有 `paid` / `shipped` / `refunded` 流转 | 没有真实电商闭环；OrderPage 的"已支付"是纯前端 fake | 加 `PATCH /api/orders/:id/pay` 接口 + 状态机校验 + 支付回调 webhook |
-| 2 | 权限只靠 `ADMIN_USERNAMES` 环境变量列管理员；商家依赖 `merchants` 表 status | 没有完整 RBAC（role / permission 表） | 引入 `roles` / `role_permissions` / `user_roles` 三表，中间件按 permission 校验 |
-| 3 | 缓存防击穿是单实例 `singleflight` | 多实例部署时每个实例仍会各自击穿一次 | 在 Redis 层用 `SET NX` 加一道分布式锁；当前文档 `docs/design.md §9.3` 已说明 |
-| 4 | JWT 无主动失效机制（退出登录只清前端 localStorage） | 失窃 token 在 72h 内仍有效 | 加 Redis 黑名单 + 中间件查询；或改用更短 TTL + refresh token |
-| 5 | WebSocket 不是真正的可靠消息队列 | 客户端断线期间错过的事件不会重放；靠 HTTP 拉快照兜底 | 实现 server-side 消息缓冲 + 客户端 `last_seen_id` 拉取断流 |
-| 6 | `lib/ws.ts` 退避/心跳逻辑没单测，乐观出价回滚没集成测试 | 回归风险 | 用 vitest 加单测；用 MSW mock WS server 加集成测试 |
-| 7 | 错误消息中英文混杂（前端组件文案中文、后端 error 字符串中文、`console-table` 表头英文） | 不影响功能但无 i18n 框架 | 引入 `react-i18next` + 后端 error code 化 |
-| 8 | `/admin/metrics` 不是 Prometheus 文本格式 | 无法直接挂 Grafana | 加 `/metrics` 路由输出 Prometheus exposition format |
-| 9 | 没有分布式 trace（OpenTelemetry / Jaeger） | 出价链路定位耗时只能看单机日志 | 在 Gin middleware 里注入 trace；HTTP / DB / Redis / WS 都加 span |
-| 10 | 没有日志聚合（结构化 JSON 日志 + ELK / Loki） | log.Printf 散落各处 | 切换 zap / slog；docker-compose 接 Loki |
-| 11 | 注册节流和登录失败计数器存在进程内 map | 多实例下计数不共享 | 改用 Redis `INCR` + `EXPIRE` |
-| 12 | 上传图片直接落本地磁盘（`/uploads`） | 多实例 / 容器重启会丢；没有 CDN | 接对象存储（OSS / S3） + CDN |
-| 13 | 没有 OpenAPI / Swagger 文档导出 | API 文档只在 README 列路由 | 用 swag 自动从注释生成 |
-| 14 | 没有自动化 E2E 测试 | 跨端流程靠人工跑 `docs/demo.md` | playwright/cypress 覆盖"创建 → 开始 → 双端出价 → 封顶 → 订单"全链路 |
-
-### 前端（仍可推进）
-
-| # | 现状 / 不足 | 修复方向 |
-|---|---|---|
-| 1 | `AdminOrders` / `GetBids` 后端已支持分页 + 返回 `meta.total`，前端还没接"加载更多" | 加按钮或无限滚动消费 `meta.total > data.length` |
-| 2 | 视频流没有显式 ABR 策略，hls.js 全默认 | 在弱网下配置 `hls.config.maxBufferLength` 等 |
-| 3 | 没有 PWA / 离线壳 | 加 `manifest.json` + service worker，弱网时显示最后一次缓存的拍品大厅 |
-| 4 | AuctionDetail.tsx 仍有 600 行；视频 init effect 可继续抽 `useLiveVideo` hook | 进一步纯化主组件 |
-| 5 | 直播间没"屏蔽某号牌评论"等运营工具 | 商家端加 `POST /api/admin/comments/:id/hide`（需后端配合，但后端冻结了）｜或纯前端本地屏蔽列表 |
-| 6 | 没有 Storybook，组件文档靠源码 | 给 `components/live/` 写故事 |
-| 7 | 大厅没有"我关注的拍品" / "即将开始提醒" | 纯前端 localStorage 收藏 + Web Notification API |
-| 8 | 没有键盘快捷键（直播间空格出价、B 打开自定义） | 加 keymap |
-
-### 部署 / 运维
-
-| # | 现状 |
-|---|---|
-| 1 | `deploy/` 提供模板但还没公网上线；evaluation 用录屏代替在线 Demo |
-| 2 | Nginx 配置没显式开 HTTP/2 |
-| 3 | 没有 CDN / edge cache（拍品图片直接打到 origin） |
-| 4 | 没有 CI（GitHub Actions），合并前不自动跑 `go test` / `npm run build` |
-
----
-
-## 📁 项目结构
-
-```
-auction-system/
-├── README.md                  # 你正在看的文件
-├── docker-compose.yml         # 一键启动 MySQL + Redis
-├── docs/
-│   ├── demo.md                # 3-5 分钟演示闭环脚本
-│   ├── design.md              # 架构、状态机、并发和权限方案
-│   ├── ai-usage.md            # AI 使用流程和人工把控边界
-│   ├── performance.md         # 压测方法、结果模板和一致性检查 SQL
-│   ├── deployment.md          # 生产服务器部署说明
-│   └── 演示数据.md             # 演示账号、拍卖、后台维护操作说明
-├── deploy/
-│   ├── docker-compose.prod.yml # 生产 Docker Compose 编排
-│   ├── nginx.conf              # HTTPS / API / WS 反向代理模板
-│   └── .env.prod.example       # 生产环境变量模板
-│
-├── backend/                   # Go 后端
-│   ├── Dockerfile              # 后端生产镜像
-│   ├── go.mod / go.sum        # Go 依赖清单
-│   ├── .env                   # 真实配置（不要提交 git）
-│   ├── .env.example           # 配置模板（可提交）
-│   ├── .gitignore
-│   ├── cmd/server/main.go     # 程序入口（启动时初始化 DB + 定时器）
-│   ├── config/
-│   │   ├── config.go          # 加载 .env 配置
-│   │   ├── db.go              # GORM 连 MySQL + AutoMigrate
-│   │   ├── redis.go           # Redis 客户端 + 出价短锁
-│   │   ├── cache.go           # Redis JSON 短 TTL 读缓存
-│   │   ├── seed.go            # SEED_DEMO_DATA 首启演示数据灌入
-│   │   └── scheduler.go       # 5s 定时扫描过期竞拍
-│   ├── controllers/           # 接口处理函数
-│   │   ├── health_controller.go
-│   │   ├── auth.go            # 注册 / 登录 / 当前用户
-│   │   ├── auction.go         # 竞拍 CRUD + 开始/取消（含 WS 广播）
-│   │   ├── bid.go             # 出价 + Top10 排行（含 WS 广播）
-│   │   ├── admin_metrics.go   # 管理员轻量监控指标
-│   │   ├── admin_demo.go      # 管理员演示数据维护：强制结束 / 删除拍卖 / 删除 demo 用户
-│   │   ├── order.go           # 查询订单 + 内部 createOrder
-│   │   └── ws.go              # WebSocket 升级 + 心跳泵
-│   ├── middleware/
-│   │   └── auth.go            # JWT 签发 + 验证中间件
-│   ├── ws/
-│   │   └── hub.go             # WebSocket 房间管理器（按 auction_id 分房）
-│   ├── routes/routes.go       # 路由注册 + CORS
-│   └── models/                # 数据模型
-│       ├── user.go
-│       ├── auction.go
-│       ├── bid.go
-│       └── order.go           # 含 CreateOrderForAuction 工具函数
-│
-└── frontend/                  # React + TypeScript 前端
-    ├── Dockerfile              # 前端生产镜像
-    ├── nginx.default.conf      # 前端容器内静态资源 Nginx 配置
-    ├── package.json
-    ├── .env                   # VITE_API_BASE 指向后端
-    ├── vite.config.ts         # 含 @tailwindcss/vite 插件
-    └── src/
-        ├── main.tsx
-        ├── App.tsx            # BrowserRouter 路由表
-        ├── index.css          # Tailwind 入口 + flash 动画
-        ├── api/client.ts      # axios + ws URL 生成 + JWT 拦截器
-        ├── lib/
-        │   ├── types.ts       # Auction/Bid/Order/WSMessage 类型
-        │   ├── auth.ts        # token / user 存 localStorage
-        │   └── ws.ts          # AuctionWS：5 次自动重连
-        ├── components/
-        │   ├── StatusBadge.tsx
-        │   ├── Countdown.tsx
-        │   ├── RequireAuth.tsx    # 未登录跳 /login 的路由守卫
-        │   ├── PhoneFrame.tsx     # 桌面端把用户端套进 iPhone 边框
-        │   ├── BottomNav.tsx      # 用户端底部 Tab：🏠 大厅 / 👤 我的
-        │   ├── AdminLayout.tsx    # 商家端：左栏 + 内容区
-        │   └── AdminSidebar.tsx   # 商家端左侧导航
-        └── pages/
-            ├── UserHall.tsx           # /         大厅（大标题 + pill 过滤 + 卡片）
-            ├── Me.tsx                 # /me       我的（含商家入口）
-            ├── Login.tsx              # /login    登录 / 注册
-            ├── AuctionDetail.tsx      # /auction/:id        用户端实时详情
-            ├── OrderPage.tsx          # /auction/:id/order  订单
-            ├── AdminList.tsx          # /admin              商家竞拍管理表格
-            ├── AdminAuctionDetail.tsx # /admin/auctions/:id 商家端商品详情
-            └── AdminCreate.tsx        # /admin/create       发布竞拍
-```
-
----
-
-## 🗂️ 数据模型
-
-数据库 `auction` 共 6 张表，GORM 启动时 AutoMigrate 自动建好。所有主键 `bigint unsigned`，金额核心字段使用整数分（`*_cents`），旧的元字段保留用于前端兼容，时间 `datetime(3)`（毫秒精度）。
-
-### `auctions`（竞拍主表）
-
-> 命名说明：原任务描述中称为"商品表 `auction_items`"，本项目把"商品"和"竞拍场次"合并到一张表（小项目惯例），表名保留 `auctions`。后续若出现"同一商品多次开拍"再拆表。
-
-| 字段 | 类型 | 索引 | 说明 |
-|---|---|---|---|
-| `id` | bigint unsigned | PK | 主键 |
-| `seller_user_id` | bigint unsigned | IDX | 创建该竞拍的商家用户 |
-| `title` | varchar(255) | — | 商品标题 |
-| `description` | text | — | 商品描述 |
-| `image_url` | varchar(512) | — | 主图 URL |
-| `start_price_cents` | bigint | — | 起拍价（分） |
-| `price_step_cents` | bigint | — | 加价幅度（分） |
-| `ceiling_price_cents` | bigint | — | 封顶价（分，可空） |
-| `current_price_cents` | bigint | — | 当前价（分） |
-| `start_price`/`price_step`/`ceiling_price`/`current_price` | decimal(12,2) | — | 兼容旧前端的元字段 |
-| `duration_seconds` | bigint | — | 持续秒数 |
-| `auto_extend_seconds` | bigint | — | 自动延时秒数，默认 30 |
-| `status` | varchar(16) | IDX | pending / active / finished / cancelled |
-| `winner_id` | bigint unsigned | — | 中标用户（可空） |
-| `started_at` | datetime(3) | — | 开始时间 |
-| `ends_at` | datetime(3) | IDX | 结束时间（定时器扫描此字段） |
-| `created_at`/`updated_at` | datetime(3) | — | 时间戳 |
-
-### `bids`（出价流水表，只增不改）
-
-| 字段 | 类型 | 索引 | 说明 |
-|---|---|---|---|
-| `id` | bigint unsigned | PK | |
-| `auction_id` | bigint unsigned | IDX | 哪场竞拍 |
-| `user_id` | bigint unsigned | IDX | 出价人 |
-| `amount_cents` | bigint | — | 出价金额（分） |
-| `amount` | decimal(12,2) | — | 兼容旧前端的元字段 |
-| `client_bid_id` | varchar(64) | UNIQUE(`auction_id`,`user_id`,`client_bid_id`) | 前端点击级幂等键，可空 |
-| `created_at` | datetime(3) | — | 出价时间 |
-
-### `orders`（订单表）
-
-| 字段 | 类型 | 索引 | 说明 |
-|---|---|---|---|
-| `id` | bigint unsigned | PK | |
-| `auction_id` | bigint unsigned | **UNIQUE** | 一场拍卖最多一个订单 |
-| `user_id` | bigint unsigned | IDX | 中标用户 |
-| `final_price_cents` | bigint | — | 成交价（分） |
-| `final_price` | decimal(12,2) | — | 兼容旧前端的元字段 |
-| `status` | varchar(16) | — | 默认 pending（后续可扩 paid/shipped） |
-| `created_at`/`updated_at` | datetime(3) | — | 时间戳 |
-
-### `comments`（直播评论表）
-
-| 字段 | 类型 | 索引 | 说明 |
-|---|---|---|---|
-| `id` | bigint unsigned | PK | |
-| `auction_id` | bigint unsigned | IDX | 哪场竞拍 |
-| `user_id` | bigint unsigned | IDX | 评论用户 |
-| `username` | varchar(64) | — | 评论时用户名快照 |
-| `content` | varchar(300) | — | 评论内容 |
-| `created_at` | datetime(3) | IDX | 评论时间 |
-
-### `merchants`（商家表）
-
-| 字段 | 类型 | 索引 | 说明 |
-|---|---|---|---|
-| `id` | bigint unsigned | PK | |
-| `user_id` | bigint unsigned | UNIQUE | 对应用户 |
-| `display_name` | varchar(64) | — | 商家展示名 |
-| `status` | varchar(16) | IDX | active / disabled |
-| `created_at`/`updated_at` | datetime(3) | — | 时间戳 |
-
-### `users`（用户表）
-
-| 字段 | 类型 | 索引 | 说明 |
-|---|---|---|---|
-| `id` | bigint unsigned | PK | |
-| `username` | varchar(64) | UNIQUE | 用户名，2–32 字符 |
-| `password_hash` | varchar(128) | — | bcrypt 哈希，JSON 序列化时被 `json:"-"` 隐藏 |
-| `created_at`/`updated_at` | datetime(3) | — | |
-
-> 注册 / 登录 / JWT 鉴权由 `controllers/auth.go` + `middleware/auth.go` 提供。
-
-### `user_events`（用户行为埋点）
-
-| 字段 | 类型 | 索引 | 说明 |
-|---|---|---|---|
-| `id` | bigint unsigned | PK | |
-| `auction_id` | bigint unsigned | IDX | 哪场竞拍 |
-| `user_id` | bigint unsigned | IDX | 行为发生的用户 |
-| `event_type` | varchar(64) | IDX | 例如 `enter_room` / `click_bid_chip` / `leave_room` |
-| `metadata` | text | — | 自定义 JSON 字符串（≤ 2000 字符） |
-| `user_agent` | varchar(255) | — | 自动采集，截断到 255 字符 |
-| `created_at` | datetime(3) | — | 上报时间 |
-
-> 由 `POST /api/auctions/:id/events` 写入；管理端 `metrics.total_events_today` 暴露今日采集总量。
-
-### 状态机
-
-```
-pending(未开始) ──/start──→ active(进行中) ──自然到期/触达封顶──→ finished(已结束)
-       │                          │
-       └────/cancel────→ cancelled(已取消) ←────/cancel────┘
-```
-
-- pending：只能 start 或 cancel
-- active：可出价、可 cancel；定时器扫描 `ends_at`；触达 `ceiling_price` 立即结束
-- finished / cancelled：只读，不可逆
-- 创建 / 开始 / 取消竞拍：需要商家或管理员权限
-- 查询订单：需要登录，且只能由中标用户、竞拍商家或管理员查看
-
----
-
-## 🚀 快速启动
-
-### 前置依赖
-
-| 工具 | 版本 | 说明 |
+| 工具 | 版本 | 用途 |
 |---|---|---|
 | Go | ≥ 1.25 | 后端运行环境 |
 | Node.js | ≥ 20 | 前端开发环境 |
-| Docker (或 OrbStack) | 最新 | 跑 MySQL / Redis |
+| Docker(或 OrbStack) | 最新 | 跑 MySQL 8 / Redis 7 容器 |
+| MySQL | 8.x(容器内置) | 数据持久化 |
+| Redis | 7.x(容器内置) | 读缓存 + 出价短锁 |
 
-### 启动步骤
+**后端关键依赖**:`gin` / `gorm` + `mysql driver` / `gorilla/websocket` / `go-redis/v9` / `joho/godotenv` / `golang-jwt` / `bcrypt`。
 
-**1. 启动数据库容器**
-```bash
-cd /Users/adam/Desktop/auction-system
-docker compose up -d
-```
-确认运行：
-```bash
-docker ps
-```
-应看到 `auction-mysql` 和 `auction-redis` 都是 `Up` 状态。
-
-**2. 启动后端**（新开一个终端）
-```bash
-cd /Users/adam/Desktop/auction-system/backend
-go run ./cmd/server
-```
-看到 `Listening and serving HTTP on :8080` 即成功。
-
-浏览器访问 <http://localhost:8080/health>，应看到：
-```json
-{"service":"auction-system","status":"ok","time":"..."}
-```
-
-**3. 启动前端**（再开一个终端）
-```bash
-cd /Users/adam/Desktop/auction-system/frontend
-npm install   # 首次需要
-npm run dev
-```
-浏览器访问 <http://localhost:5173/>，应看到绿字 JSON 显示后端健康状态。
-
-### 停止
-
-```bash
-docker compose down       # 停容器（保留数据）
-docker compose down -v    # 停容器并删除数据卷
-```
-后端 / 前端在各自终端按 `Ctrl+C` 终止。
+**前端关键依赖**:`react 19` / `react-router-dom` / `axios` / `vite` / `@tailwindcss/vite` / `hls.js`。
 
 ---
 
-## 🔧 配置说明
+## 3. 启动步骤
+
+**1. 启动数据库容器**
+
+```bash
+cd /Users/adam/Desktop/auction-system
+docker compose up -d
+docker ps   # 确认 auction-mysql / auction-redis 都 Up
+```
+
+**2. 启动后端**(新终端)
+
+```bash
+cd backend
+cp .env.example .env   # 首次需要,然后按需修改
+go run ./cmd/server
+```
+
+看到 `Listening and serving HTTP on :8080` 即成功。访问 <http://localhost:8080/health> 应返回 JSON。
+
+**3. 启动前端**(再开一个终端)
+
+```bash
+cd frontend
+npm install   # 首次需要
+npm run dev
+```
+
+浏览器访问 <http://localhost:5173/>。
+
+**4. 演示数据(可选)**
+
+在 `backend/.env` 设置 `SEED_DEMO_DATA=true` 后重启后端,会自动灌入演示账号与拍卖。完整账号清单见 [docs/演示数据.md](./docs/演示数据.md)。
+
+**5. 停止**
+
+```bash
+docker compose down       # 停容器(保留数据)
+docker compose down -v    # 停容器并删除数据卷
+```
+
+前后端在各自终端按 `Ctrl+C` 终止。
+
+---
+
+## 4. 目录结构
+
+```
+auction-system/
+├── README.md                  # 本文件(简版)
+├── README.full.md             # 完整开发记录(阶段、压测、已知不足)
+├── 成果演示DEMO.md             # 比赛成果演示文档
+├── docker-compose.yml         # 一键启动 MySQL + Redis
+├── docs/                      # 设计、演示、部署、压测、AI 使用文档
+├── deploy/                    # 生产 Docker Compose + Nginx + 环境变量模板
+│
+├── backend/                   # Go 后端
+│   ├── cmd/server/main.go    # 程序入口
+│   ├── config/               # 配置 / DB / Redis / 缓存 / 调度器 / seed
+│   ├── controllers/          # auth / auction / bid / order / ws / admin_*
+│   ├── middleware/auth.go   # JWT 签发 + 验证
+│   ├── ws/hub.go            # WebSocket 房间管理
+│   ├── routes/routes.go     # 路由注册 + CORS
+│   ├── models/              # User / Merchant / Auction / Bid / Order / Comment / UserEvent
+│   ├── Dockerfile           # 生产镜像
+│   └── .env.example         # 配置模板
+│
+└── frontend/                 # React + TypeScript 前端
+    ├── src/
+    │   ├── App.tsx          # 路由表(懒加载)
+    │   ├── api/client.ts    # axios + JWT 拦截器
+    │   ├── lib/             # types / auth / ws / paddle / icons
+    │   ├── components/      # 公共组件 + components/live/(直播间子组件)
+    │   └── pages/           # UserHall / AuctionDetail / Me / Login / OrderPage / Admin*
+    ├── Dockerfile
+    └── nginx.default.conf
+```
+
+详细模型字段、API 路由清单见 [README.full.md](./README.full.md)。
+
+---
+
+## 5. 配置说明
 
 ### 后端 `backend/.env`
 
 ```env
 SERVER_PORT=8080
-SERVER_MODE=debug          # debug / release
+SERVER_MODE=debug              # debug / release
 
 DB_HOST=127.0.0.1
 DB_PORT=3306
@@ -756,185 +145,50 @@ WS_MAX_CONNECTIONS=1000
 SEED_DEMO_DATA=false
 ```
 
-> `SERVER_MODE=release` 时必须显式配置 `JWT_SECRET` 和 `ALLOWED_ORIGINS`，且 `ALLOWED_ORIGINS` 不能为 `*`。
-> `MAX_BID_AMOUNT_CENTS` 是系统级单笔出价上限，`WS_MAX_CONNECTIONS` 是单后端进程 WebSocket 最大连接数。
-> `SEED_DEMO_DATA=true` 会在首启时灌入演示账号和演示拍卖，只建议本地/受控演示环境开启。
-
-### 演示种子数据
-
-为了方便 3-5 分钟成果演示，后端支持首启自动灌入一套可操作数据：
-
-- 2 个演示商家：`demo-merchant-1`、`demo-merchant-2`
-- 12 个演示买家：`demo-buyer-1` 到 `demo-buyer-12`
-- 8 场演示拍卖：5 场 active、1 场 pending、1 场 finished、1 场 cancelled
-- active 拍卖结束时间动态设置到 14-28 天后，演示窗口大于 10 天
-- 预置出价历史、评论历史、行为埋点和 1 笔成交订单
-
-启用方式：
-
-```env
-SEED_DEMO_DATA=true
-```
-
-完整账号名单、拍卖清单、后台删除/强制结束操作见 [docs/演示数据.md](./docs/演示数据.md)。
-
-### 超级管理员账号
-
-当前项目约定使用已注册的 `admin` 用户作为开发环境超级管理员：
-
-1. 后端 `.env` 保持 `ADMIN_USERNAMES=admin`
-2. 重启后端让配置生效
-3. 前端登录 `admin` 账号
-4. 访问 `/admin`、`/admin/create`、`/admin/orders` 管理竞拍、商家和订单
-
-超级管理员按 `username` 判断，不依赖固定用户 ID。多个管理员可用英文逗号分隔，例如 `ADMIN_USERNAMES=admin,root,boss`。
+| 字段 | 说明 |
+|---|---|
+| `SERVER_MODE=release` | 生产模式必须显式配置 `JWT_SECRET` 和 `ALLOWED_ORIGINS`,且 `ALLOWED_ORIGINS` 不能为 `*` |
+| `ADMIN_USERNAMES` | 逗号分隔的超级管理员用户名列表(按 username 判断,不依赖固定 ID) |
+| `MAX_BID_AMOUNT_CENTS` | 系统级单笔出价上限(分) |
+| `WS_MAX_CONNECTIONS` | 单后端进程 WebSocket 最大连接数 |
+| `SEED_DEMO_DATA` | 首启自动灌入演示数据,仅本地/受控环境开启 |
 
 ### 前端 `frontend/.env`
 
 ```env
 VITE_API_BASE=http://localhost:8080
 ```
-> ⚠️ Vite 规定：**只有以 `VITE_` 开头的环境变量**才会暴露给浏览器代码。
 
-### 数据库连接（TablePlus / DBeaver）
+> Vite 规定:**只有以 `VITE_` 开头的环境变量**才会暴露给浏览器代码。生产模式下前端默认使用当前域名同源访问 `/api` 和 `wss://.../ws`。
+
+### 数据库连接(TablePlus / DBeaver)
 
 | 字段 | MySQL | Redis |
 |---|---|---|
 | Host | 127.0.0.1 | 127.0.0.1 |
 | Port | 3306 | 6379 |
-| 用户名 | `auction`（root 密码 `rootpass`） | — |
+| 用户名 | `auction`(root 密码 `rootpass`) | — |
 | 密码 | `auctionpass` | 无 |
 | 数据库 | `auction` | DB 0 |
 
----
+### 超级管理员账号
 
-## 🧰 技术栈说明
+1. `backend/.env` 保持 `ADMIN_USERNAMES=admin`
+2. 重启后端让配置生效
+3. 前端登录 `admin` 账号
+4. 访问 `/admin`、`/admin/create`、`/admin/orders` 管理竞拍、商家和订单
 
-### 后端依赖
-
-| 包 | 作用 |
-|---|---|
-| `github.com/gin-gonic/gin` | HTTP 框架（类似 Express） |
-| `github.com/gin-contrib/cors` | 跨域中间件 |
-| `gorm.io/gorm` + `gorm.io/driver/mysql` | ORM，把 Go 结构体映射成数据表 |
-| `github.com/gorilla/websocket` | WebSocket（实时出价用） |
-| `github.com/joho/godotenv` | 读取 `.env` 文件 |
-| `github.com/redis/go-redis/v9` | Redis 读缓存、出价短 TTL 分布式锁 |
-
-### 前端依赖
-
-由 `npm create vite@latest --template react-ts` 自动安装：React 19、React-DOM、TypeScript、Vite。
-
-### 高并发与实时同步方案
-
-| 考察点 | 当前实现 |
-|---|---|
-| 出价一致性 | MySQL 事务内 `SELECT ... FOR UPDATE` 锁定竞拍行，更新当前价、赢家、订单生成在同一事务完成 |
-| 出价幂等 | 前端每次点击带 `client_bid_id`，后端 `bids` 表用 `(auction_id,user_id,client_bid_id)` 唯一索引兜底 |
-| 分布式锁 | Redis 可用时使用 `SET NX EX` 获取 `auction:bid-lock:{id}`，Lua 校验 value 后释放 |
-| 读写分离 | 读路径优先 Redis 短 TTL 缓存；写路径只写 MySQL 并失效缓存 |
-| 防缓存击穿 | 高频读接口 TTL 很短（统计 1s，列表/详情 2s），实时状态主要靠 WebSocket 推送 |
-| 房间隔离 | WebSocket Hub 按 `auction_id` 分房间，只向对应直播间广播 |
-| 连接保护 | `WS_MAX_CONNECTIONS` 限制单后端进程最大 WebSocket 连接数，慢客户端发送缓冲满会被剔除 |
-| 断连重连 | 前端 `AuctionWS` 自动重连 5 次，每次间隔 3s；重连成功后用 HTTP 重新拉取详情、统计和评论 |
-| 毫秒倒计时 | `new_bid` / `auction_started` 带 `server_time`，前端按服务器时间校准后 100ms 刷新 |
-| 防抖节流 | 前端出价按钮有提交态 + 700ms 点击间隔保护，后端同一用户同一竞拍 700ms 兜底限流 |
-| 登录保护 | 登录失败 5 次后 1 分钟内返回 429，降低暴力破解风险 |
-| 金额保护 | 单笔出价先校验系统级 `MAX_BID_AMOUNT_CENTS`，再校验商品封顶价 |
-| 压测证明 | `docs/performance.md` 已记录本地 100 VU、300 VU 和 Redis 降级出价压测结果；`k6-ws.js` 可测 100/300/1000 同房间 WS 连接和广播到达率 |
-| 可观测性 | 健康检查 + `/api/admin/metrics` + 关键路径日志 + 测试覆盖；生产级告警面板属于后续部署阶段 |
-
-### 用户端功能验收
-
-| 功能 | 状态 | 说明 |
-|---|---|---|
-| 直播间 | ✅ | 支持 HLS 地址；加载失败时使用 `public/live.mp4` 固定演示视频 |
-| 竞拍浏览 | ✅ | 大厅展示商品列表、状态、当前价、起拍价、加价幅度、封顶价 |
-| 详情规则 | ✅ | 详情页展示当前价、封顶价、出价次数、真实参与人数、实时排行 |
-| 出价参与 | ✅ | 登录后手动出价，支持快捷倍数和自定义金额 |
-| 关键提醒 | ✅ | 领先、被超越、自动延时、竞拍结束通过 toast / 音效 / 动画反馈 |
-| 实时排行 | ✅ | 初始走 `/stats`，后续通过 `new_bid` 同步 Top5 |
-| 结果查看 | ✅ | 中标用户可查看订单并模拟支付 |
-| 历史记录 | ✅ | `/me/bids` 查看参与历史，`/me/orders` 查看订单历史 |
-
-### AI 工具使用沉淀
-
-本项目把 AI 定位为“执行与审查辅助”，而不是替代关键决策：
-
-1. 先由人确定业务边界：用户端、商家端、规则优先级、上线前安全要求。
-2. AI 负责快速扫代码、列风险、补测试、生成样板实现和 README 记录。
-3. 关键规则由测试约束：出价并发、0 元起拍、自动延时、幂等、防越权都先落到后端测试。
-4. 人工把控关键决策：金额改为分字段、管理员策略、Redis 只作为加速/锁增强而不是唯一一致性来源。
-5. AI 代码贡献率不追求越高越好：核心交易链路必须可解释、可测试、可回滚；生成代码需要经过 `go test`、前端构建和人工 diff 审查。
-
-合理贡献率评估：AI 适合承担重复代码、接口串联、测试样例、文档整理；拍卖状态机、权限边界、资金/订单一致性等核心决策应由人工确认后再让 AI 执行。
+多个管理员可用英文逗号分隔,例如 `ADMIN_USERNAMES=admin,root,boss`。
 
 ---
 
-## 📝 常见问题
+## 📚 更多文档
 
-**Q: `docker compose up` 报错 "Cannot connect to the Docker daemon"？**
-A: Docker / OrbStack 没启动。Mac 上执行 `open -a OrbStack` 或打开 Docker Desktop。
-
-**Q: 前端打开后显示 "Error: ..."？**
-A: 后端没启或 CORS 没生效。检查 8080 端口是否能 `curl http://localhost:8080/health`。
-
-**Q: 后端报 "go: ... requires go >= 1.25.0"？**
-A: Go 工具链会自动下载新版本，等一会儿即可，不用手动升级。
-
-**Q: 改了 `.env` 不生效？**
-A: 后端 `.env` 改完要重启 `go run`；前端 `.env` 改完要重启 `npm run dev`。
-
----
-
-## 📅 更新记录
-
-- **2026-06-09** — 补齐 WebSocket 大房间验证：新增 `TestBroadcastFanoutToLargeRoom` 覆盖 1000 客户端同房间广播，新增 `docs/performance/k6-ws.js` 用于真实 WS 长连接压测
-- **2026-06-09** — 补齐演示种子数据：`SEED_DEMO_DATA` 首启灌入 14 个 demo 账号、8 场长周期拍卖、出价/评论/行为历史和订单；管理后台新增强制结束、拍卖删除、demo 用户删除；新增 `docs/演示数据.md`
-- **2026-06-09** — 项目冻结，前后端不再继续开发；README 增加"项目完成度总览"和"已知不足 / 可推进方向"章节，明确项目边界
-- **2026-06-09** — 完成第十三阶段：前端工程优化（路由懒加载首屏 -63%、WS 指数退避 + 心跳监控、图片 lazy、骨架屏、乐观出价）+ AuctionDetail 拆 10 个子组件（934→600 行）+ 后端 bids/orders 分页 + register 限流
-- **2026-06-09** — 完成第十二阶段：前端设计语言重做（用户端拍卖行 + 商家端账册工坊 + 号牌身份 + ticker 弹幕 + 黄铜出价按钮 + crisis 暖红 + 全端 emoji → SVG + a11y 焦点环 + reduced-motion）
-- **2026-06-09** — 补齐上线前安全与压测证据：登录失败限流、WebSocket 最大连接数、系统级出价上限、k6 多用户压测脚本和 100/300 VU 实测结果
-- **2026-06-09** — 补齐生产部署准备：后端/前端 Dockerfile、生产 Compose、Nginx HTTPS 反代模板、生产环境变量模板和部署文档
-- **2026-06-09** — 补齐评审材料和可证明性：演示脚本、方案文档、AI 使用文档、压测脚本、WebSocket 重连补偿、metrics 接口和后端出价限流
-- **2026-06-09** — 补齐用户端竞价体验与高并发重点：0 元起拍、10-30 秒延时、出价幂等、Redis 锁/缓存、毫秒倒计时、实时参与人数和 AI 使用说明
-- **2026-06-08** — 补齐商家后台基础工作流：图片上传、未开始竞拍编辑、自定义延时、订单管理页
-- **2026-06-08** — 完成第七阶段：后端核心加固，出价事务锁、商家权限、订单保护、金额分字段、生产安全配置和测试覆盖
-- **2026-06-08** — 完成直播评论持久化：comments 表、历史评论接口、POST 评论接口、WebSocket `new_comment`
-- **2026-06-07** — 完成第六阶段：UI 全面升级，液态玻璃 + 暖色 mesh 背景 + 黄橙 accent 配色
-- **2026-06-07** — 完成第五阶段：用户系统（JWT + bcrypt），敏感接口加鉴权，前端 /login 页 + 路由守卫
-- **2026-06-07** — 完成第四阶段：前端 5 个页面（商家 2 + 用户 3），Tailwind + react-router-dom + 实时 WebSocket 集成
-- **2026-06-07** — 完成第三阶段：WebSocket 实时通信，4 类事件接入，多客户端 E2E 验证通过
-- **2026-06-07** — 完成第二阶段：后端业务接口全部实现，含 9 条 API + 定时任务，E2E 测试通过
-- **2026-05-22** — 完成第一阶段：项目框架搭建、前后端联调成功
-
----
-
-<!--
-================================================================================
-【本文件作用】README.md（项目根目录）
-================================================================================
-作用：整个拍卖系统项目的"门面文档"和"使用说明书"。
-任何人（包括未来的你）打开 GitHub 仓库时，第一眼看到的就是这个文件。
-
-包含内容：
-  1. 项目简介（用了什么技术栈）
-  2. 当前进度（哪些阶段完成、哪些未完成）
-  3. 项目目录结构总览
-  4. 快速启动步骤（怎么跑起来）
-  5. 配置说明（.env 各字段含义）
-  6. 数据库连接信息（给 TablePlus / DBeaver 用）
-  7. 技术栈说明（每个依赖包是干嘛的）
-  8. 常见问题（FAQ）
-  9. 更新记录
-
-为什么放在根目录：
-  GitHub 会自动识别根目录的 README.md 并渲染到仓库首页。
-  这是开源项目的"行业潜规则"，必须放这里。
-
-何时更新：
-  - 完成一个阶段时，更新"当前进度"和"更新记录"
-  - 新增依赖或配置项时，更新"技术栈"或"配置说明"
-  - 遇到新坑时，补充到"常见问题"
-================================================================================
--->
+- [README.full.md](./README.full.md) — 完整开发记录、阶段说明、API 清单、数据模型、压测数据、已知不足
+- [成果演示DEMO.md](./成果演示DEMO.md) — 比赛参赛成果演示文档
+- [docs/design.md](./docs/design.md) — 架构、状态机、并发、权限方案
+- [docs/demo.md](./docs/demo.md) — 3-5 分钟演示闭环脚本
+- [docs/deployment.md](./docs/deployment.md) — 生产服务器部署说明
+- [docs/performance.md](./docs/performance.md) — 压测方法与结果
+- [docs/ai-usage.md](./docs/ai-usage.md) — AI 使用流程与人工把控边界
+- [docs/演示数据.md](./docs/演示数据.md) — 演示账号与后台操作说明
